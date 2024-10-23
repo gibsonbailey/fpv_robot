@@ -4,4 +4,4 @@ PORT=/dev/cu.usbmodem2101
 
 # arduino-cli upload --log --fqbn esp32:esp32:featheresp32 --port $PORT combined
 
-arduino-cli upload --log -p $PORT --fqbn arduino:megaavr:nona4809 main
+arduino-cli upload --log -p $PORT --fqbn arduino:megaavr:nona4809 stepper

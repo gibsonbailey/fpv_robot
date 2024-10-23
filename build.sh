@@ -1,2 +1,1 @@
-# This is the fqbn for the Adafruit Arduino Nano Every
-arduino-cli compile --log --fqbn arduino:megaavr:nona4809 main
+./build_only.sh && ./upload.sh && ./monitor_serial.sh

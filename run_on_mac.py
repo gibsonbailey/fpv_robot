@@ -1,11 +1,19 @@
+import subprocess
 import time
-import json
+import threading
 import serial
 
 from pynput import keyboard
 
 
-arduino_port = "/dev/cu.usbmodem2101"
+# Run the bash command as a single subprocess
+arduino_port = subprocess.run(
+    ["bash", "-c", "arduino-cli board list | grep 'Nano Every' | awk '{print $1}'"],
+    capture_output=True,
+    text=True
+).stdout.strip()
+
+print(f"Arduino Port: {arduino_port}")
 baud_rate = 9600
 
 
@@ -65,8 +73,21 @@ frame_time = 1 / frame_rate
 g_pitch = 0
 g_yaw = 0
 
+
+# Create a thread that listens for data from the Arduino
+def read_from_arduino():
+    while True:
+        data = ser.readline().decode("utf-8").strip()
+        if data:
+            print(f"Received: {data}")
+
+
 # Continuously wait for a key press to send data
 try:
+    # Start the thread that listens for data from the Arduino
+    read_thread = threading.Thread(target=read_from_arduino)
+    read_thread.start()
+
     print('Calibrate the robot by sending pitch and yaw. Then enter "next".')
     while True:
         command = input("Enter two integers for pitch and yaw respectively:\n")

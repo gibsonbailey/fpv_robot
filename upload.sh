@@ -1,6 +1,7 @@
 PORT=/dev/cu.usbserial-02BA53BD
 PORT=/dev/cu.SLAB_USBtoUART
-PORT=/dev/cu.usbmodem2101
+PORT=/dev/cu.usbmodem101
+PORT=$(arduino-cli board list | grep "Nano Every" | awk '{print $1}')
 
 # arduino-cli upload --log --fqbn esp32:esp32:featheresp32 --port $PORT combined
 

@@ -44,15 +44,20 @@ void prepare_driver(TMC2209Stepper& driver) {
   driver.pdn_disable(true);
   driver.mstep_reg_select(true);
 
-  driver.rms_current(800);
+  driver.rms_current(400);
   driver.microsteps(MICROSTEPS);
 }
 
-void prepare_stepper(AccelStepper& stepper) {
-  stepper.setMaxSpeed(MAX_SPEED);
-  stepper.setAcceleration(MAX_ACCELERATION);
+// Optional argument for slow acceleration
+void prepare_stepper(AccelStepper& stepper, bool slow = false) {
+  if (slow) {
+    stepper.setMaxSpeed(static_cast<float>(MAX_SPEED) / (75.0f / 30.0f) / 1.1f);
+    stepper.setAcceleration(static_cast<float>(MAX_ACCELERATION) / (75.0f / 30.0f) / 1.1f);
+  } else {
+    stepper.setMaxSpeed(MAX_SPEED);
+    stepper.setAcceleration(MAX_ACCELERATION);
+  }
 }
-
 
 void update_stepper_angles(AccelStepper& pitch_stepper, int32_t pitch_angle, AccelStepper& yaw_stepper, int32_t yaw_angle) {
     float yaw_gear_ratio = 75.0 / 30.0;
@@ -91,7 +96,7 @@ void update_stepper_angles(AccelStepper& pitch_stepper, int32_t pitch_angle, Acc
 }
 
 void setup() {
-  Serial.begin(BAUD_RATE);
+  Serial.begin(115200);
   Serial1.begin(BAUD_RATE);
 
   while (!Serial) {
@@ -108,14 +113,14 @@ void setup() {
   prepare_driver(yawDriver);
   Serial.println("Yaw TMC2209 ready");
 
-  prepare_stepper(stepper);
+  prepare_stepper(stepper, true);
   Serial.println("Stepper ready");
 
   prepare_stepper(yawStepper);
   Serial.println("Yaw Stepper ready");
 
-  stepper.moveTo(4000);
-  yawStepper.moveTo(4000);
+  stepper.moveTo(0);
+  yawStepper.moveTo(0);
 }
 
 int dir = -1;
@@ -126,7 +131,7 @@ int32_t yaw_angle = 0;
 
 void loop() {
     while (Serial.available() >= 8) {
-      // Read 4 bytes for pitch and 4 bytes for yaw
+        // Read 4 bytes for pitch and 4 bytes for yaw
         pitch_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
         yaw_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
 

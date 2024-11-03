@@ -14,7 +14,7 @@ arduino_port = subprocess.run(
 ).stdout.strip()
 
 print(f"Arduino Port: {arduino_port}")
-baud_rate = 9600
+baud_rate = 115200
 
 
 # Open the serial connection to the Arduino
@@ -33,13 +33,24 @@ def validate_and_send_command_to_arduino(message):
     send_command_to_arduino(pitch, yaw)
 
 
+last_sent_pitch = 0
+last_sent_yaw = 0
+
 def send_command_to_arduino(pitch, yaw):
+    # Only send the command if it's different from the last one
+    global last_sent_pitch
+    global last_sent_yaw
+    if pitch == last_sent_pitch and yaw == last_sent_yaw:
+        return
+    last_sent_pitch = pitch
+    last_sent_yaw = yaw
+
     # Encode these as two bytes each
     pitch_bytes = pitch.to_bytes(4, byteorder="big", signed=True)
     yaw_bytes = yaw.to_bytes(4, byteorder="big", signed=True)
     ser.write(pitch_bytes)
     ser.write(yaw_bytes)
-    print(f"Sent: {pitch_bytes} {yaw_bytes}")
+    # print(f"Sent: {pitch_bytes} {yaw_bytes}")
 
 
 # A set to store currently pressed keys

@@ -13,7 +13,7 @@
 // TMC2209 is addressed based on the MS1 and MS2 pins
 // If both pins are connected to GND, the address is 0b00
 #define DRIVER_ADDRESS 0b00
-#define YAW_DRIVER_ADDRESS 0b01
+#define YAW_DRIVER_ADDRESS 0b10
 
 
 AccelStepper stepper(AccelStepper::DRIVER, stepPin, dirPin);

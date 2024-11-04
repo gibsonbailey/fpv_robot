@@ -10,7 +10,7 @@ from pynput import keyboard
 arduino_port = subprocess.run(
     ["bash", "-c", "arduino-cli board list | grep 'Nano Every' | awk '{print $1}'"],
     capture_output=True,
-    text=True
+    text=True,
 ).stdout.strip()
 
 print(f"Arduino Port: {arduino_port}")
@@ -19,7 +19,7 @@ baud_rate = 115200
 
 # Open the serial connection to the Arduino
 ser = serial.Serial(arduino_port, baud_rate)
-time.sleep(2)  # Give some time for the connection to establish
+time.sleep(1)  # Give some time for the connection to establish
 
 
 def validate_and_send_command_to_arduino(message):
@@ -36,6 +36,7 @@ def validate_and_send_command_to_arduino(message):
 last_sent_pitch = 0
 last_sent_yaw = 0
 
+
 def send_command_to_arduino(pitch, yaw):
     # Only send the command if it's different from the last one
     global last_sent_pitch
@@ -50,6 +51,8 @@ def send_command_to_arduino(pitch, yaw):
     yaw_bytes = yaw.to_bytes(4, byteorder="big", signed=True)
     ser.write(pitch_bytes)
     ser.write(yaw_bytes)
+
+    print(f"Sent pitch: {g_pitch} yaw {g_yaw}")
     # print(f"Sent: {pitch_bytes} {yaw_bytes}")
 
 
@@ -132,7 +135,6 @@ try:
             g_pitch = int(g_pitch)
             g_yaw = int(g_yaw)
 
-            print(f"pitch {g_pitch} yaw {g_yaw}")
             send_command_to_arduino(g_pitch, g_yaw)
 
         # Wait for the next frame

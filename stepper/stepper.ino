@@ -26,7 +26,7 @@ TMC2209Stepper yawDriver(&Serial1, R_sense, YAW_DRIVER_ADDRESS);
 const int MAX_SPEED = 3000;
 const int MAX_ACCELERATION = 10000;
 const int BAUD_RATE = 9600;
-const int MICROSTEPS = 4;
+const int MICROSTEPS = 0;
 
 
 int degrees_to_microsteps(int degrees) {
@@ -34,8 +34,15 @@ int degrees_to_microsteps(int degrees) {
     // 200 steps per revolution
     // 1 revolution = 360 degrees
     // 1 degree = 200 / 360 steps
-    float microsteps = static_cast<float>(degrees) * 200.0f * static_cast<float>(MICROSTEPS) / 360.0f;
-    return static_cast<int>(microsteps);
+    float microsteps_setting = static_cast<float>(MICROSTEPS);
+    if (MICROSTEPS == 0) {
+      microsteps_setting = 1;
+    }
+    float microsteps = static_cast<float>(degrees) * 200.0f * microsteps_setting / 360.0f;
+    int s = static_cast<int>(microsteps);
+    Serial.print("Steps: ");
+    Serial.println(s);
+    return s;
 }
 
 void prepare_driver(TMC2209Stepper& driver) {
@@ -44,14 +51,14 @@ void prepare_driver(TMC2209Stepper& driver) {
   driver.pdn_disable(true);
   driver.mstep_reg_select(true);
 
-  driver.rms_current(400);
+  driver.rms_current(600);
   driver.microsteps(MICROSTEPS);
 }
 
 // Optional argument for slow acceleration
 void prepare_stepper(AccelStepper& stepper, bool slow = false) {
   if (slow) {
-    stepper.setMaxSpeed(static_cast<float>(MAX_SPEED) / (75.0f / 30.0f) / 1.1f);
+    stepper.setMaxSpeed(static_cast<float>(MAX_SPEED));// / (75.0f / 30.0f) / 1.1f);
     stepper.setAcceleration(static_cast<float>(MAX_ACCELERATION) / (75.0f / 30.0f) / 1.1f);
   } else {
     stepper.setMaxSpeed(MAX_SPEED);
@@ -96,21 +103,23 @@ void update_stepper_angles(AccelStepper& pitch_stepper, int32_t pitch_angle, Acc
 }
 
 void setup() {
-  Serial.begin(115200);
+  // Initialize Serial1 and set up drivers immediately, otherwise
+  // the current will not be limited on start up and the motors may get hot.
   Serial1.begin(BAUD_RATE);
 
-  while (!Serial) {
-    ;
-  }
   while (!Serial1) {
     ;
   }
-  Serial.println("Serial ready");
 
   prepare_driver(driver);
-  Serial.println("Pitch TMC2209 ready");
-
   prepare_driver(yawDriver);
+
+  // Start talking to command computer
+  Serial.begin(115200);
+  while (!Serial) {
+    ;
+  }
+  Serial.println("Pitch TMC2209 ready");
   Serial.println("Yaw TMC2209 ready");
 
   prepare_stepper(stepper, true);

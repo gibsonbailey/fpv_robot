@@ -1,3 +1,5 @@
+import struct
+import socket
 import subprocess
 import time
 import threading
@@ -20,6 +22,38 @@ baud_rate = 115200
 # Open the serial connection to the Arduino
 ser = serial.Serial(arduino_port, baud_rate)
 time.sleep(1)  # Give some time for the connection to establish
+
+
+def run_headset_orientation_server():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        HOST = "0.0.0.0"  # Listen on all interfaces
+        PORT = 12345  # Port to listen on
+        s.bind((HOST, PORT))
+        s.listen()
+        print(f"Server listening on {HOST}:{PORT}")
+        conn, addr = s.accept()
+        with conn:
+            print(f"Connected by {addr}")
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                str_data = data.decode()
+
+                # There must be two commas in the string to be valid
+                if str_data.count(",") != 2:
+                    print("Invalid data format: must have 2 commas")
+                    continue
+                pitch, yaw, roll = str_data.split(",")
+                print("pitch", pitch)
+                print("yaw", yaw)
+                try:
+                    pitch = float(pitch)
+                    yaw = float(yaw)
+                except ValueError:
+                    print("Invalid data format: must be float")
+                    continue
+                send_command_to_arduino(-pitch, -yaw)
 
 
 def validate_and_send_command_to_arduino(message):
@@ -46,9 +80,11 @@ def send_command_to_arduino(pitch, yaw):
     last_sent_pitch = pitch
     last_sent_yaw = yaw
 
-    # Encode these as two bytes each
-    pitch_bytes = pitch.to_bytes(4, byteorder="big", signed=True)
-    yaw_bytes = yaw.to_bytes(4, byteorder="big", signed=True)
+    # Encode these as 4 bytes each
+    # pitch_bytes = pitch.to_bytes(4, byteorder="big", signed=True)
+    # yaw_bytes = yaw.to_bytes(4, byteorder="big", signed=True)
+    pitch_bytes = struct.pack("f", pitch)
+    yaw_bytes = struct.pack("f", yaw)
     ser.write(pitch_bytes)
     ser.write(yaw_bytes)
 
@@ -105,6 +141,11 @@ try:
     print('Calibrate the robot by sending pitch and yaw. Then enter "next".')
     while True:
         command = input("Enter two integers for pitch and yaw respectively:\n")
+
+        # headset
+        if command == "h":
+            run_headset_orientation_server()
+
         if command == "next":
             print("entered live mode")
             break

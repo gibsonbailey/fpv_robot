@@ -15,7 +15,7 @@ int main() {
 
     avformat_network_init();
 
-    const char* url = "udp://@:5000";  // Listen on all network interfaces, port 5000
+    const char* url = "udp://@:5253";  // Listen on all network interfaces, port 5253
 
     std::cout << "Opening UDP stream: " << url << std::endl;
 
@@ -26,6 +26,8 @@ int main() {
     }
 
     std::cout << "Opened UDP stream successfully." << std::endl;
+
+    av_log_set_level(AV_LOG_DEBUG);
 
     if (avformat_find_stream_info(formatContext, nullptr) < 0) {
         std::cerr << "Error: Could not find stream information." << std::endl;
@@ -60,13 +62,20 @@ int main() {
         return -1;
     }
 
+    int dst_width = 854;
+    int dst_height = 480;
+    AVPixelFormat dst_pix_fmt = AV_PIX_FMT_BGRA;
+
     struct SwsContext* swsCtx = sws_getContext(
         codecContext->width,
         codecContext->height,
         codecContext->pix_fmt,
-        codecContext->width,
-        codecContext->height,
-        AV_PIX_FMT_BGR24,
+        dst_width,
+        dst_height,
+        dst_pix_fmt,
+        // codecContext->width,
+        // codecContext->height,
+        // AV_PIX_FMT_BGR24,
         SWS_BILINEAR,
         nullptr,
         nullptr,
@@ -101,11 +110,19 @@ int main() {
         std::cout << "Frame decoded." << std::endl;
 
         if (have_new_frame) {
-            // Convert the frame from its native format to BGR (used by OpenCV)
-            cv::Mat image(codecContext->height, codecContext->width, CV_8UC3);
+            // Convert the frame from its native format to BGRA (used by OpenCV)
+            cv::Mat image(dst_height, dst_width, CV_8UC4);
             uint8_t* dest[4] = { image.data, nullptr, nullptr, nullptr };
             int dest_linesize[4] = { static_cast<int>(image.step[0]), 0, 0, 0 };
-            sws_scale(swsCtx, latest_frame->data, latest_frame->linesize, 0, codecContext->height, dest, dest_linesize);
+            sws_scale(
+                swsCtx,
+                latest_frame->data,
+                latest_frame->linesize,
+                0,
+                codecContext->height,
+                dest,
+                dest_linesize
+            );
 
             // Display the image
             cv::imshow("UDP Video Stream", image);

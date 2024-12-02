@@ -26,10 +26,10 @@ TMC2209Stepper yawDriver(&Serial1, R_sense, YAW_DRIVER_ADDRESS);
 const int MAX_SPEED = 3000;
 const int MAX_ACCELERATION = 10000;
 const int BAUD_RATE = 9600;
-const int MICROSTEPS = 0;
+const int MICROSTEPS = 4;
 
 
-int degrees_to_microsteps(int degrees) {
+int degrees_to_microsteps(float degrees) {
     // MICROSTEPS microsteps per step
     // 200 steps per revolution
     // 1 revolution = 360 degrees
@@ -38,10 +38,10 @@ int degrees_to_microsteps(int degrees) {
     if (MICROSTEPS == 0) {
       microsteps_setting = 1;
     }
-    float microsteps = static_cast<float>(degrees) * 200.0f * microsteps_setting / 360.0f;
+    float microsteps = degrees * 200.0f * microsteps_setting / 360.0f;
     int s = static_cast<int>(microsteps);
-    Serial.print("Steps: ");
-    Serial.println(s);
+    // Serial.print("Steps: ");
+    // Serial.println(s);
     return s;
 }
 
@@ -51,7 +51,7 @@ void prepare_driver(TMC2209Stepper& driver) {
   driver.pdn_disable(true);
   driver.mstep_reg_select(true);
 
-  driver.rms_current(600);
+  driver.rms_current(750);
   driver.microsteps(MICROSTEPS);
 }
 
@@ -66,7 +66,7 @@ void prepare_stepper(AccelStepper& stepper, bool slow = false) {
   }
 }
 
-void update_stepper_angles(AccelStepper& pitch_stepper, int32_t pitch_angle, AccelStepper& yaw_stepper, int32_t yaw_angle) {
+void update_stepper_angles(AccelStepper& pitch_stepper, float pitch_angle, AccelStepper& yaw_stepper, float yaw_angle) {
     float yaw_gear_ratio = 75.0 / 30.0;
     float pitch_gear_ratio = 40.0 / 20.0;
 
@@ -91,8 +91,8 @@ void update_stepper_angles(AccelStepper& pitch_stepper, int32_t pitch_angle, Acc
     // Translate the pitch and yaw angles to the servo angles.
     // 0, 0 -> half of max angle, half of max angle
 
-    int yaw_stepper_angle = yaw_angle * yaw_gear_ratio;
-    int pitch_stepper_angle = pitch_angle * pitch_gear_ratio;
+    float yaw_stepper_angle = yaw_angle * yaw_gear_ratio;
+    float pitch_stepper_angle = pitch_angle * pitch_gear_ratio;
 
     // Adjust pitch angle based on yaw angle
     pitch_stepper_angle = pitch_stepper_angle - yaw_angle;
@@ -135,21 +135,58 @@ void setup() {
 int dir = -1;
 int yawDir = 1;
 
-int32_t pitch_angle = 0;
-int32_t yaw_angle = 0;
+float pitch_angle = 0;
+float yaw_angle = 0;
+
+int counter = 0;
+
+byte serial_buffer[8];
+int serial_buffer_index = 0;
 
 void loop() {
-    while (Serial.available() >= 8) {
+    // if (counter % 6000 == 0) {
+    //   yaw_angle += 4000 * dir;
+
+    //   Serial.print("Yaw angle: ");
+    //   Serial.println(yaw_angle);
+    //   // Serial.print("Yaw angle in steps: ");
+    //   // Serial.println(degrees_to_microsteps(yaw_angle));
+
+    //   // stepper.moveTo(yaw_angle);
+    //   yawStepper.moveTo(yaw_angle);
+    //   dir *= -1;
+    // }
+    //   counter += 1;
+
+    if (Serial.available()) {
+        byte b = Serial.read();
+        if (serial_buffer_index < 8) {
+            serial_buffer[serial_buffer_index] = b;
+            serial_buffer_index += 1;
+        }
+        if (serial_buffer_index == 8) {
+            // pitch_angle = (int32_t)serial_buffer[0] << 24 | (int32_t)serial_buffer[1] << 16 | (int32_t)serial_buffer[2] << 8 | (int32_t)serial_buffer[3];
+            // yaw_angle = (int32_t)serial_buffer[4] << 24 | (int32_t)serial_buffer[5] << 16 | (int32_t)serial_buffer[6] << 8 | (int32_t)serial_buffer[7];
+
+        memcpy(&pitch_angle, serial_buffer, 4);
+        memcpy(&yaw_angle, serial_buffer + 4, 4);
+
+        Serial.print("Yaw angle: ");
+        Serial.println(yaw_angle);
+
+        update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
+        serial_buffer_index = 0;
+    }
         // Read 4 bytes for pitch and 4 bytes for yaw
-        pitch_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
-        yaw_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
+        // pitch_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
+        // yaw_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
 
         // Serial.print("Pitch angle: ");
         // Serial.println(pitch_angle);
         // Serial.print("Yaw angle: ");
         // Serial.println(yaw_angle);
 
-        update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
+        // update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
     }
 
     stepper.run();

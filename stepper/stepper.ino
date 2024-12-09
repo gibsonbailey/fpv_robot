@@ -140,8 +140,10 @@ float yaw_angle = 0;
 
 int counter = 0;
 
-byte serial_buffer[8];
+// 4 bytes for header, 4 bytes for pitch, 4 bytes for yaw
+byte serial_buffer[12];
 int serial_buffer_index = 0;
+int32_t HEADER = 0xDEADBEEF;
 
 void loop() {
     // if (counter % 6000 == 0) {
@@ -160,33 +162,34 @@ void loop() {
 
     if (Serial.available()) {
         byte b = Serial.read();
-        if (serial_buffer_index < 8) {
+        if (serial_buffer_index < 12) {
             serial_buffer[serial_buffer_index] = b;
             serial_buffer_index += 1;
         }
-        if (serial_buffer_index == 8) {
-            // pitch_angle = (int32_t)serial_buffer[0] << 24 | (int32_t)serial_buffer[1] << 16 | (int32_t)serial_buffer[2] << 8 | (int32_t)serial_buffer[3];
-            // yaw_angle = (int32_t)serial_buffer[4] << 24 | (int32_t)serial_buffer[5] << 16 | (int32_t)serial_buffer[6] << 8 | (int32_t)serial_buffer[7];
 
-        memcpy(&pitch_angle, serial_buffer, 4);
-        memcpy(&yaw_angle, serial_buffer + 4, 4);
+        // if we've read at least 4 bytes, we can check for a valid header
+        if (serial_buffer_index >= 4) {
+            int32_t header = 0;
+            memcpy(&header, serial_buffer, 4);
+            if (header != HEADER) {
+                // Shift the buffer by 1 byte
+                for (int i = 0; i < 11; i++) {
+                    serial_buffer[i] = serial_buffer[i + 1];
+                }
+                serial_buffer_index--;
+            }
+        }
 
-        Serial.print("Yaw angle: ");
-        Serial.println(yaw_angle);
+        if (serial_buffer_index == 12) {
+            memcpy(&pitch_angle, serial_buffer + 4, 4);
+            memcpy(&yaw_angle, serial_buffer + 8, 4);
 
-        update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
-        serial_buffer_index = 0;
-    }
-        // Read 4 bytes for pitch and 4 bytes for yaw
-        // pitch_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
-        // yaw_angle = (int32_t)Serial.read() << 24 | (int32_t)Serial.read() << 16 | (int32_t)Serial.read() << 8 | (int32_t)Serial.read();
+            // Serial.print("Yaw angle: ");
+            // Serial.println(yaw_angle);
 
-        // Serial.print("Pitch angle: ");
-        // Serial.println(pitch_angle);
-        // Serial.print("Yaw angle: ");
-        // Serial.println(yaw_angle);
-
-        // update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
+            update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
+            serial_buffer_index = 0;
+        }
     }
 
     stepper.run();

@@ -1,4 +1,5 @@
 import struct
+import collections
 import socket
 import subprocess
 import time
@@ -24,7 +25,25 @@ ser = serial.Serial(arduino_port, baud_rate)
 time.sleep(1)  # Give some time for the connection to establish
 
 
+def recv_all(sock, length):
+    data = b""
+    while len(data) < length:
+        more = sock.recv(length - len(data))
+        if not more:
+            raise ConnectionError("Socket connection closed")
+        data += more
+    return data
+
+
 def run_headset_orientation_server():
+    time_buffer_size = 20
+
+    # dequeue for time buffer
+    time_buffer = collections.deque(maxlen=time_buffer_size)
+
+    time_buffer_print_interval = 60
+    time_buffer_print_index = 0
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         HOST = "0.0.0.0"  # Listen on all interfaces
         PORT = 12345  # Port to listen on
@@ -35,21 +54,31 @@ def run_headset_orientation_server():
         with conn:
             print(f"Connected by {addr}")
             while True:
-                data = conn.recv(1024)
+                # data = conn.recv(8)
+                data = recv_all(conn, 8)
                 if not data:
                     break
-                str_data = data.decode()
+                # str_data = data.decode()
 
-                # There must be two commas in the string to be valid
-                if str_data.count(",") != 2:
-                    print("Invalid data format: must have 2 commas")
-                    continue
-                pitch, yaw, roll = str_data.split(",")
-                print("pitch", pitch)
-                print("yaw", yaw)
+                time_buffer.append(time.time())
+                if len(time_buffer) == time_buffer_size:
+                    time_buffer.popleft()
+                    time_buffer_print_index += 1
+                    if time_buffer_print_index % time_buffer_print_interval == 0:
+                        time_diff = time_buffer[-1] - time_buffer[0]
+                        print(f"cam data {time_buffer_size / time_diff} Hz")
+
+                # # There must be two commas in the string to be valid
+                # if str_data.count(",") != 2:
+                #     print(f"Invalid data format: must have 2 commas; {str_data}")
+                #     continue
+                # pitch, yaw, roll = str_data.split(",")
+                # print("pitch", pitch)
+                # print("yaw", yaw)
                 try:
-                    pitch = float(pitch)
-                    yaw = float(yaw)
+                    pitch, yaw = struct.unpack("<ff", data)
+                    # pitch = float(pitch)
+                    # yaw = float(yaw)
                 except ValueError:
                     print("Invalid data format: must be float")
                     continue
@@ -80,15 +109,13 @@ def send_command_to_arduino(pitch, yaw):
     last_sent_pitch = pitch
     last_sent_yaw = yaw
 
-    # Encode these as 4 bytes each
-    # pitch_bytes = pitch.to_bytes(4, byteorder="big", signed=True)
-    # yaw_bytes = yaw.to_bytes(4, byteorder="big", signed=True)
-    pitch_bytes = struct.pack("f", pitch)
-    yaw_bytes = struct.pack("f", yaw)
-    ser.write(pitch_bytes)
-    ser.write(yaw_bytes)
+    # 0xDEADBEEF as a header
+    ready_to_send_bytes = struct.pack("<Iff", 0xDEADBEEF, pitch, yaw)
 
-    print(f"Sent pitch: {g_pitch} yaw {g_yaw}")
+    # Send the packet
+    ser.write(ready_to_send_bytes)
+
+    # print(f"Sent pitch: {pitch} yaw {yaw}")
     # print(f"Sent: {pitch_bytes} {yaw_bytes}")
 
 
@@ -117,7 +144,7 @@ listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 listener.start()
 
 # Desired loop rate
-frame_rate = 60
+frame_rate = 200
 frame_time = 1 / frame_rate
 
 g_pitch = 0
@@ -144,7 +171,12 @@ try:
 
         # headset
         if command == "h":
-            run_headset_orientation_server()
+            while True:
+                try:
+                    run_headset_orientation_server()
+                except Exception as e:
+                    print(f"Error: {e}")
+                    time.sleep(2)
 
         if command == "next":
             print("entered live mode")

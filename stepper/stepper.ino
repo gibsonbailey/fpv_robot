@@ -102,6 +102,42 @@ void update_stepper_angles(AccelStepper& pitch_stepper, float pitch_angle, Accel
     yaw_stepper.moveTo(degrees_to_microsteps(yaw_stepper_angle));
 }
 
+float remap(float value, float fromLow, float fromHigh, float toLow, float toHigh) {
+  return (value - fromLow) * (toHigh - toLow) / (fromHigh - fromLow) + toLow;
+}
+
+const float min_steering_duty = 0.04;
+const float max_steering_duty = 0.08;
+const float top = 4999;
+// const float top = 9999;
+
+uint16_t mapSteering(float fraction) {
+  // Constrain fraction to [0.0, 1.0]
+  if (fraction < 0.0f) fraction = 0.0f;
+  if (fraction > 1.0f) fraction = 1.0f;
+
+  // Linear interpolation
+  float mapped = remap(fraction, 0.0f, 1.0f, min_steering_duty * top, max_steering_duty * top);
+  if (mapped > top) mapped = top; // Safety clamp
+
+  return (uint16_t)mapped;
+}
+
+const float min_throttle_duty = 0.05;
+const float max_throttle_duty = 0.1;
+
+uint16_t mapThrottle(float fraction) {
+  // Constrain fraction to [0.0, 1.0]
+  if (fraction < 0.0f) fraction = 0.0f;
+  if (fraction > 1.0f) fraction = 1.0f;
+
+  // Linear interpolation
+  float mapped = remap(fraction, 0.0f, 1.0f, min_throttle_duty * top, max_throttle_duty * top);
+  if (mapped > top) mapped = top; // Safety clamp
+
+  return (uint16_t)mapped;
+}
+
 void setup() {
   // Initialize Serial1 and set up drivers immediately, otherwise
   // the current will not be limited on start up and the motors may get hot.
@@ -130,6 +166,44 @@ void setup() {
 
   stepper.moveTo(0);
   yawStepper.moveTo(0);
+
+  // Begin setup for RC car motor controls
+  pinMode(9, OUTPUT); // TCA channel 0
+  pinMode(10, OUTPUT); // TCA channel 1
+
+  noInterrupts();      // Disable interrupts during setup
+
+  // Set up TCA0 for 50 Hz PWM on channels 0 & 1
+
+  // Clear TCA0 before configuring
+  TCA0.SINGLE.CTRLA = 0;
+
+  // Single-slope PWM mode; enable compare channels 0 & 1
+  TCA0.SINGLE.CTRLB = TCA_SINGLE_WGMODE_SINGLESLOPE_gc
+                    | TCA_SINGLE_CMP0EN_bm
+                    | TCA_SINGLE_CMP1EN_bm;
+
+  // Clock source = 16 MHz / 64 = 250 kHz
+  // Set period for 50 Hz
+  TCA0.SINGLE.PER = 4999;
+  // Set period for 500 Hz
+  // TCA0.SINGLE.PER = 9999;
+
+  // Example duty cycles (50% here)
+  TCA0.SINGLE.CMP0 = mapSteering(0.5);
+  TCA0.SINGLE.CMP1 = mapThrottle(0.5);
+
+  // Clear any pending interrupts
+  TCA0.SINGLE.INTFLAGS = TCA_SINGLE_OVF_bm;
+
+  // Enable the timer; prescaler = 64
+  TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV64_gc
+                    | TCA_SINGLE_ENABLE_bm;
+  // Enable the timer; prescaler = 4
+  // TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV4_gc
+  //                   | TCA_SINGLE_ENABLE_bm;
+
+  interrupts();        // Re-enable interrupts
 }
 
 int dir = -1;
@@ -140,57 +214,113 @@ float yaw_angle = 0;
 
 int counter = 0;
 
-// 4 bytes for header, 4 bytes for pitch, 4 bytes for yaw
-byte serial_buffer[12];
+// 4 bytes for header, 
+// 1 byte for packet type,
+// 4 bytes for pitch/throttle,
+// 4 bytes for yaw/steering
+const int buffer_size = 12;
+const int header_size = 4;
+byte serial_buffer[buffer_size];
 int serial_buffer_index = 0;
 int32_t HEADER = 0xDEADBEEF;
 
+// Just after the header, one byte for packet type
+// 0x01 for pitch and yaw angles
+// 0x02 for throttle and steering
+
+byte PITCH_YAW = 0x01;
+byte THROTTLE_STEERING = 0x02;
+
+// List of valid packet types
+byte PACKET_TYPES[] = {PITCH_YAW, THROTTLE_STEERING};
+
+uint16_t test_val = 0;
+int increment = 1;
+
 void loop() {
-    // if (counter % 6000 == 0) {
-    //   yaw_angle += 4000 * dir;
-
-    //   Serial.print("Yaw angle: ");
-    //   Serial.println(yaw_angle);
-    //   // Serial.print("Yaw angle in steps: ");
-    //   // Serial.println(degrees_to_microsteps(yaw_angle));
-
-    //   // stepper.moveTo(yaw_angle);
-    //   yawStepper.moveTo(yaw_angle);
-    //   dir *= -1;
-    // }
-    //   counter += 1;
-
     if (Serial.available()) {
         byte b = Serial.read();
-        if (serial_buffer_index < 12) {
+        if (serial_buffer_index < buffer_size) {
             serial_buffer[serial_buffer_index] = b;
             serial_buffer_index += 1;
         }
 
-        // if we've read at least 4 bytes, we can check for a valid header
-        if (serial_buffer_index >= 4) {
+        // if there are 4 bytes in the buffer, check for a valid header
+        if (serial_buffer_index == 4) {
             int32_t header = 0;
             memcpy(&header, serial_buffer, 4);
             if (header != HEADER) {
                 // Shift the buffer by 1 byte
-                for (int i = 0; i < 11; i++) {
+                for (int i = 0; i < buffer_size - 1; i++) {
                     serial_buffer[i] = serial_buffer[i + 1];
                 }
                 serial_buffer_index--;
             }
         }
 
-        if (serial_buffer_index == 12) {
-            memcpy(&pitch_angle, serial_buffer + 4, 4);
-            memcpy(&yaw_angle, serial_buffer + 8, 4);
+        // if there are 5 bytes in the buffer, check for a valid packet type
+        // if (serial_buffer_index == header_size) {
+        //     byte packet_type = serial_buffer[4];
+        //     bool valid_packet_type = false;
+        //     for (int i = 0; i < 2; i++) {
+        //         if (packet_type == PACKET_TYPES[i]) {
+        //             valid_packet_type = true;
+        //             break;
+        //         }
+        //     }
+
+        //     if (!valid_packet_type) {
+        //         // Shift the buffer by 1 byte
+        //         for (int i = 0; i < buffer_size - 1; i++) {
+        //             serial_buffer[i] = serial_buffer[i + 1];
+        //         }
+        //         serial_buffer_index--;
+        //     }
+        // }
+
+        if (serial_buffer_index == buffer_size) {
+            memcpy(&pitch_angle, serial_buffer + header_size, 4);
+            memcpy(&yaw_angle, serial_buffer + header_size + 4, 4);
 
             // Serial.print("Yaw angle: ");
             // Serial.println(yaw_angle);
 
             update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
             serial_buffer_index = 0;
+
+            const float steering_yaw = remap(yaw_angle, -180.0f, 180.0f, 0.0f, 1.0f);
+            const float throttle_val = remap(pitch_angle, -180.0f, 180.0f, 0.0f, 1.0f);
+            // Serial.print("Steering yaw: ");
+            // Serial.println(steering_yaw);
+            // Serial.print("Steering pulse: ");
+            // Serial.println(mapSteering(steering_yaw));
+            // pin 9 (steering)
+            TCA0.SINGLE.CMP0 = mapSteering(steering_yaw);
+
+            Serial.print("Throttle: ");
+            Serial.println(throttle_val);
+            Serial.print("Throttle pulse: ");
+            Serial.println(mapThrottle(throttle_val));
+
+            // pin 10 (throttle)
+            TCA0.SINGLE.CMP1 = mapThrottle(throttle_val);
         }
     }
+
+    // Scan through values for throttle
+
+    // if (test_val >= 6249) {
+    //   test_val = 0;
+    // }
+
+    // Serial.print("Test val: ");
+    // Serial.println(test_val);
+
+    // TCA0.SINGLE.CMP1 = test_val;
+
+    // test_val += increment;
+
+    // delay(10);
 
     stepper.run();
     yawStepper.run();

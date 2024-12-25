@@ -106,10 +106,10 @@ float remap(float value, float fromLow, float fromHigh, float toLow, float toHig
   return (value - fromLow) * (toHigh - toLow) / (fromHigh - fromLow) + toLow;
 }
 
-const float min_steering_duty = 0.04;
-const float max_steering_duty = 0.08;
+const float min_steering_duty = 0.052;
+const float max_steering_duty = 0.098;
 const float top = 4999;
-// const float top = 9999;
+const float steering_trim = -22.0;
 
 uint16_t mapSteering(float fraction) {
   // Constrain fraction to [0.0, 1.0]
@@ -118,6 +118,10 @@ uint16_t mapSteering(float fraction) {
 
   // Linear interpolation
   float mapped = remap(fraction, 0.0f, 1.0f, min_steering_duty * top, max_steering_duty * top);
+
+  // Add trim
+  mapped += steering_trim;
+
   if (mapped > top) mapped = top; // Safety clamp
 
   return (uint16_t)mapped;
@@ -211,28 +215,21 @@ int yawDir = 1;
 
 float pitch_angle = 0;
 float yaw_angle = 0;
+float throttle_value = 0;
+float steering_value = 0;
 
 int counter = 0;
 
 // 4 bytes for header, 
-// 1 byte for packet type,
-// 4 bytes for pitch/throttle,
-// 4 bytes for yaw/steering
-const int buffer_size = 12;
+// 4 bytes for pitch,
+// 4 bytes for yaw,
+// 4 bytes for throttle,
+// 4 bytes for steering
+const int buffer_size = 20;
 const int header_size = 4;
 byte serial_buffer[buffer_size];
 int serial_buffer_index = 0;
 int32_t HEADER = 0xDEADBEEF;
-
-// Just after the header, one byte for packet type
-// 0x01 for pitch and yaw angles
-// 0x02 for throttle and steering
-
-byte PITCH_YAW = 0x01;
-byte THROTTLE_STEERING = 0x02;
-
-// List of valid packet types
-byte PACKET_TYPES[] = {PITCH_YAW, THROTTLE_STEERING};
 
 uint16_t test_val = 0;
 int increment = 1;
@@ -258,69 +255,33 @@ void loop() {
             }
         }
 
-        // if there are 5 bytes in the buffer, check for a valid packet type
-        // if (serial_buffer_index == header_size) {
-        //     byte packet_type = serial_buffer[4];
-        //     bool valid_packet_type = false;
-        //     for (int i = 0; i < 2; i++) {
-        //         if (packet_type == PACKET_TYPES[i]) {
-        //             valid_packet_type = true;
-        //             break;
-        //         }
-        //     }
-
-        //     if (!valid_packet_type) {
-        //         // Shift the buffer by 1 byte
-        //         for (int i = 0; i < buffer_size - 1; i++) {
-        //             serial_buffer[i] = serial_buffer[i + 1];
-        //         }
-        //         serial_buffer_index--;
-        //     }
-        // }
-
         if (serial_buffer_index == buffer_size) {
             memcpy(&pitch_angle, serial_buffer + header_size, 4);
             memcpy(&yaw_angle, serial_buffer + header_size + 4, 4);
+            memcpy(&throttle_value, serial_buffer + header_size + 8, 4);
+            memcpy(&steering_value, serial_buffer + header_size + 12, 4);
+
+            serial_buffer_index = 0;
 
             // Serial.print("Yaw angle: ");
             // Serial.println(yaw_angle);
 
             update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
-            serial_buffer_index = 0;
-
-            const float steering_yaw = remap(yaw_angle, -180.0f, 180.0f, 0.0f, 1.0f);
-            const float throttle_val = remap(pitch_angle, -180.0f, 180.0f, 0.0f, 1.0f);
-            // Serial.print("Steering yaw: ");
-            // Serial.println(steering_yaw);
-            // Serial.print("Steering pulse: ");
-            // Serial.println(mapSteering(steering_yaw));
-            // pin 9 (steering)
-            TCA0.SINGLE.CMP0 = mapSteering(steering_yaw);
 
             Serial.print("Throttle: ");
-            Serial.println(throttle_val);
-            Serial.print("Throttle pulse: ");
-            Serial.println(mapThrottle(throttle_val));
+            Serial.println(throttle_value);
+            Serial.print("Steering: ");
+            Serial.println(steering_value);
 
+            const float steering_yaw = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
+            const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 0.75f);
+
+            // pin 9 (steering)
+            TCA0.SINGLE.CMP0 = mapSteering(steering_yaw);
             // pin 10 (throttle)
             TCA0.SINGLE.CMP1 = mapThrottle(throttle_val);
         }
     }
-
-    // Scan through values for throttle
-
-    // if (test_val >= 6249) {
-    //   test_val = 0;
-    // }
-
-    // Serial.print("Test val: ");
-    // Serial.println(test_val);
-
-    // TCA0.SINGLE.CMP1 = test_val;
-
-    // test_val += increment;
-
-    // delay(10);
 
     stepper.run();
     yawStepper.run();

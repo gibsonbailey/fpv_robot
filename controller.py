@@ -54,11 +54,9 @@ def run_headset_orientation_server():
         with conn:
             print(f"Connected by {addr}")
             while True:
-                # data = conn.recv(8)
                 data = recv_all(conn, 8)
                 if not data:
                     break
-                # str_data = data.decode()
 
                 time_buffer.append(time.time())
                 if len(time_buffer) == time_buffer_size:
@@ -68,17 +66,8 @@ def run_headset_orientation_server():
                         time_diff = time_buffer[-1] - time_buffer[0]
                         print(f"cam data {time_buffer_size / time_diff} Hz")
 
-                # # There must be two commas in the string to be valid
-                # if str_data.count(",") != 2:
-                #     print(f"Invalid data format: must have 2 commas; {str_data}")
-                #     continue
-                # pitch, yaw, roll = str_data.split(",")
-                # print("pitch", pitch)
-                # print("yaw", yaw)
                 try:
                     pitch, yaw = struct.unpack("<ff", data)
-                    # pitch = float(pitch)
-                    # yaw = float(yaw)
                 except ValueError:
                     print("Invalid data format: must be float")
                     continue

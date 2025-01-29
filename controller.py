@@ -6,7 +6,7 @@ import time
 import threading
 import serial
 
-from pynput import keyboard
+# from pynput import keyboard
 
 
 # Run the bash command as a single subprocess
@@ -54,7 +54,7 @@ def run_headset_orientation_server():
         with conn:
             print(f"Connected by {addr}")
             while True:
-                data = recv_all(conn, 8)
+                data = recv_all(conn, 16)
                 if not data:
                     break
 
@@ -67,11 +67,13 @@ def run_headset_orientation_server():
                         print(f"cam data {time_buffer_size / time_diff} Hz")
 
                 try:
-                    pitch, yaw = struct.unpack("<ff", data)
+                    pitch, yaw, throttle, steering = struct.unpack("<ffff", data)
                 except ValueError:
                     print("Invalid data format: must be float")
                     continue
-                send_command_to_arduino(-pitch, -yaw)
+                send_command_to_arduino(-pitch, -yaw, throttle, steering)
+                if time_buffer_print_index % time_buffer_print_interval == 0:
+                    print(f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}")
 
 
 def validate_and_send_command_to_arduino(message):
@@ -82,24 +84,24 @@ def validate_and_send_command_to_arduino(message):
     except:
         print("wrong format")
         return
-    send_command_to_arduino(pitch, yaw)
+    send_command_to_arduino(pitch, yaw, 0, 0)
 
 
 last_sent_pitch = 0
 last_sent_yaw = 0
 
 
-def send_command_to_arduino(pitch, yaw):
+def send_command_to_arduino(pitch, yaw, throttle, steering):
     # Only send the command if it's different from the last one
-    global last_sent_pitch
-    global last_sent_yaw
-    if pitch == last_sent_pitch and yaw == last_sent_yaw:
-        return
-    last_sent_pitch = pitch
-    last_sent_yaw = yaw
+    # global last_sent_pitch
+    # global last_sent_yaw
+    # if pitch == last_sent_pitch and yaw == last_sent_yaw and throttle
+    #     return
+    # last_sent_pitch = pitch
+    # last_sent_yaw = yaw
 
     # 0xDEADBEEF as a header
-    ready_to_send_bytes = struct.pack("<Iff", 0xDEADBEEF, pitch, yaw)
+    ready_to_send_bytes = struct.pack("<Iffff", 0xDEADBEEF, pitch, yaw, throttle, steering)
 
     # Send the packet
     ser.write(ready_to_send_bytes)
@@ -129,8 +131,8 @@ def on_release(key):
 
 
 # Start listening for key press and release events
-listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-listener.start()
+# listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+# listener.start()
 
 # Desired loop rate
 frame_rate = 200
@@ -145,7 +147,8 @@ def read_from_arduino():
     while True:
         data = ser.readline().decode("utf-8").strip()
         if data:
-            print(f"Received: {data}")
+            pass
+            # print(f"Received: {data}")
 
 
 # Continuously wait for a key press to send data
@@ -197,12 +200,13 @@ try:
             g_pitch = int(g_pitch)
             g_yaw = int(g_yaw)
 
-            send_command_to_arduino(g_pitch, g_yaw)
+            send_command_to_arduino(g_pitch, g_yaw, 0, 0)
 
         # Wait for the next frame
         time.sleep(frame_time)
 except KeyboardInterrupt:
     print("Program stopped.")
-    listener.stop()
+    # listener.stop()
 finally:
     ser.close()  # Close the serial port when done
+

@@ -213,11 +213,6 @@ void setup() {
 int dir = -1;
 int yawDir = 1;
 
-float pitch_angle = 0;
-float yaw_angle = 0;
-float throttle_value = 0;
-float steering_value = 0;
-
 int counter = 0;
 
 // 4 bytes for header, 
@@ -255,6 +250,11 @@ void loop() {
             }
         }
 
+        float pitch_angle = 0;
+        float yaw_angle = 0;
+        float throttle_value = 0;
+        float steering_value = 0;
+
         if (serial_buffer_index == buffer_size) {
             memcpy(&pitch_angle, serial_buffer + header_size, 4);
             memcpy(&yaw_angle, serial_buffer + header_size + 4, 4);
@@ -268,13 +268,17 @@ void loop() {
 
             update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
 
+            Serial.print("Pitch: ");
+            Serial.println(pitch_angle);
+            Serial.print("Yaw: ");
+            Serial.println(yaw_angle);
             Serial.print("Throttle: ");
             Serial.println(throttle_value);
             Serial.print("Steering: ");
             Serial.println(steering_value);
 
             const float steering_yaw = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
-            const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 0.75f);
+            const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 1.0f);
 
             // pin 9 (steering)
             TCA0.SINGLE.CMP0 = mapSteering(steering_yaw);

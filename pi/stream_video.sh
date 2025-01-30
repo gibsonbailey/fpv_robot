@@ -19,9 +19,9 @@ IP_ADDRESS=10.0.0.187
 PORT=5253
 
 
-# Make request to 192.168.0.14:4337
+# Make POST request to 192.168.0.14:4337
 # Get the server_ip out of the json response store it in IP_ADDRESS
-IP_ADDRESS=$(curl -s http://192.168.0.14:4337/server | jq -r '.server_ip')
+IP_ADDRESS=$(curl -s -H "Content-Type: application/json" -X POST http://192.168.0.14:4337/client | jq -r '.server_ip')
 
 echo "IP_ADDRESS: $IP_ADDRESS"
 echo "PORT: $PORT"

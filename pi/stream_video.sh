@@ -33,12 +33,10 @@ PUBLIC_IP=$(curl -s https://api.ipify.org)
 #            "client_public_ip": "123.45.67.89"
 #          }'
 
-IP_ADDRESS=$(curl -s -X POST http://192.168.0.14:4337 -H "Content-Type: application/json" -d "{\"client_local_ip\": \"$LOCAL_IP\", \"client_public_ip\": \"$PUBLIC_IP\"}" | jq -r '.server_ip')
+IP_ADDRESS=$(curl -s -X POST http://192.168.0.14:4337/client -H "Content-Type: application/json" -d "{\"client_local_ip\": \"$LOCAL_IP\", \"client_public_ip\": \"$PUBLIC_IP\"}" | jq -r '.server_ip')
 
 echo "IP_ADDRESS: $IP_ADDRESS"
 echo "PORT: $PORT"
-
-exit
 
 
 # G Streamer (hardware encoded with v4l2h264enc)

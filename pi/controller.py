@@ -69,6 +69,14 @@ def get_controller_server_info():
         return None
 
 
+class ControllerServerConnectionRefusedError(Exception):
+    # Store ip and port
+    def __init__(self, ip, port):
+        super().__init__(f"Connection refused by server at {ip}:{port}")
+        self.ip = ip
+        self.port = port
+
+
 def run_headset_orientation_client():
     time_buffer_size = 20
 
@@ -89,9 +97,12 @@ def run_headset_orientation_client():
     # Create a socket connection to the server
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        HOST = "0.0.0.0"  # Listen on all interfaces
-        PORT = 12345  # Port to listen on
-        s.connect((HOST, PORT))
+        # HOST = "0.0.0.0"  # Listen on all interfaces
+        # PORT = 12345  # Port to listen on
+        try:
+            s.connect((HOST, PORT))
+        except ConnectionRefusedError:
+            raise ControllerServerConnectionRefusedError(HOST, PORT)
         print(f"Server connected to {HOST}:{PORT}")
         while True:
             data = recv_all(s, 16)
@@ -212,10 +223,8 @@ try:
                 try:
                     run_headset_orientation_client()
                 # In the case of failed connection
-                except ConnectionRefusedError:
-                    print(
-                        f"Control server connection refused. Retrying in {failure_delay} seconds."
-                    )
+                except ControllerServerConnectionRefusedError as e:
+                    print(f"Connection refused by server at {e.ip}:{e.port}")
                     time.sleep(failure_delay)
                 except Exception as e:
                     print(f"Error: {e}")

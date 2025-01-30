@@ -208,15 +208,18 @@ try:
         # headset
         if command == "h":
             while True:
+                failure_delay = 4
                 try:
                     run_headset_orientation_client()
                 # In the case of failed connection
                 except ConnectionRefusedError:
-                    print("Control server connection refused. Retrying in 2 seconds...")
-                    time.sleep(4)
+                    print(
+                        f"Control server connection refused. Retrying in {failure_delay} seconds."
+                    )
+                    time.sleep(failure_delay)
                 except Exception as e:
                     print(f"Error: {e}")
-                    time.sleep(2)
+                    time.sleep(failure_delay)
 
         if command == "next":
             print("entered live mode")

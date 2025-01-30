@@ -1,4 +1,5 @@
 import struct
+import requests
 import collections
 import socket
 import subprocess
@@ -35,6 +36,39 @@ def recv_all(sock, length):
     return data
 
 
+def get_controller_server_info():
+    CONNECTION_SERVICE_IP = "127.0.0.1"
+    CONNECTION_SERVICE_PORT = 5000
+
+    client_local_ip = socket.gethostbyname(socket.gethostname())
+    client_public_ip = requests.get("https://api.ipify.org").text
+
+    print(f"Client Local IP: {client_local_ip}")
+    print(f"Client Public IP: {client_public_ip}")
+
+    # Send a request to the connection service
+    response = requests.post(
+        f"http://{CONNECTION_SERVICE_IP}:{CONNECTION_SERVICE_PORT}/client",
+        json={
+            "client_local_ip": client_local_ip,
+            "client_public_ip": client_public_ip,
+        },
+    )
+    if response.status_code == 200:
+        """
+        Response looks like this:
+        {
+          "server_ip": "192.168.0.10",
+          "server_port": "8080",
+          "stored_at": "2024-12-14T12:34:56.789Z"
+        }
+        """
+        return response.json()
+    else:
+        print("Failed to get controller server info")
+        return None
+
+
 def run_headset_orientation_client():
     time_buffer_size = 20
 
@@ -43,6 +77,16 @@ def run_headset_orientation_client():
 
     time_buffer_print_interval = 60
     time_buffer_print_index = 0
+
+    server_connection_data = get_controller_server_info()
+
+    if server_connection_data is None:
+        print("Failed to get controller server info")
+        return
+
+    HOST = server_connection_data["server_ip"]
+    PORT = int(server_connection_data["server_port"])
+    # Create a socket connection to the server
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         HOST = "0.0.0.0"  # Listen on all interfaces

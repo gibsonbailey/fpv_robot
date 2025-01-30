@@ -32,7 +32,7 @@ PUBLIC_IP=$(curl -s https://api.ipify.org)
 #            "client_local_ip": "192.168.0.20",
 #            "client_public_ip": "123.45.67.89"
 #          }'
-while
+while true
 do
   IP_ADDRESS=$(curl -s -X POST http://192.168.0.14:4337/client -H "Content-Type: application/json" -d "{\"client_local_ip\": \"$LOCAL_IP\", \"client_public_ip\": \"$PUBLIC_IP\"}" | jq -r '.server_ip')
   

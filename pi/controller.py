@@ -35,7 +35,7 @@ def recv_all(sock, length):
     return data
 
 
-def run_headset_orientation_server():
+def run_headset_orientation_client():
     time_buffer_size = 20
 
     # dequeue for time buffer
@@ -47,33 +47,31 @@ def run_headset_orientation_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         HOST = "0.0.0.0"  # Listen on all interfaces
         PORT = 12345  # Port to listen on
-        s.bind((HOST, PORT))
-        s.listen()
-        print(f"Server listening on {HOST}:{PORT}")
-        conn, addr = s.accept()
-        with conn:
-            print(f"Connected by {addr}")
-            while True:
-                data = recv_all(conn, 16)
-                if not data:
-                    break
+        s.connect((HOST, PORT))
+        print(f"Server connected to {HOST}:{PORT}")
+        while True:
+            data = recv_all(s, 16)
+            if not data:
+                break
 
-                time_buffer.append(time.time())
-                if len(time_buffer) == time_buffer_size:
-                    time_buffer.popleft()
-                    time_buffer_print_index += 1
-                    if time_buffer_print_index % time_buffer_print_interval == 0:
-                        time_diff = time_buffer[-1] - time_buffer[0]
-                        print(f"cam data {time_buffer_size / time_diff} Hz")
-
-                try:
-                    pitch, yaw, throttle, steering = struct.unpack("<ffff", data)
-                except ValueError:
-                    print("Invalid data format: must be float")
-                    continue
-                send_command_to_arduino(-pitch, -yaw, throttle, steering)
+            time_buffer.append(time.time())
+            if len(time_buffer) == time_buffer_size:
+                time_buffer.popleft()
+                time_buffer_print_index += 1
                 if time_buffer_print_index % time_buffer_print_interval == 0:
-                    print(f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}")
+                    time_diff = time_buffer[-1] - time_buffer[0]
+                    print(f"cam data {time_buffer_size / time_diff} Hz")
+
+            try:
+                pitch, yaw, throttle, steering = struct.unpack("<ffff", data)
+            except ValueError:
+                print("Invalid data format: must be float")
+                continue
+            send_command_to_arduino(-pitch, -yaw, throttle, steering)
+            if time_buffer_print_index % time_buffer_print_interval == 0:
+                print(
+                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}"
+                )
 
 
 def validate_and_send_command_to_arduino(message):
@@ -101,7 +99,9 @@ def send_command_to_arduino(pitch, yaw, throttle, steering):
     # last_sent_yaw = yaw
 
     # 0xDEADBEEF as a header
-    ready_to_send_bytes = struct.pack("<Iffff", 0xDEADBEEF, pitch, yaw, throttle, steering)
+    ready_to_send_bytes = struct.pack(
+        "<Iffff", 0xDEADBEEF, pitch, yaw, throttle, steering
+    )
 
     # Send the packet
     ser.write(ready_to_send_bytes)
@@ -165,7 +165,7 @@ try:
         if command == "h":
             while True:
                 try:
-                    run_headset_orientation_server()
+                    run_headset_orientation_client()
                 except Exception as e:
                     print(f"Error: {e}")
                     time.sleep(2)
@@ -209,4 +209,3 @@ except KeyboardInterrupt:
     # listener.stop()
 finally:
     ser.close()  # Close the serial port when done
-

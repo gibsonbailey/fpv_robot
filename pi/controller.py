@@ -210,6 +210,10 @@ try:
             while True:
                 try:
                     run_headset_orientation_client()
+                # In the case of failed connection
+                except ConnectionRefusedError:
+                    print("Control server connection refused. Retrying in 2 seconds...")
+                    time.sleep(4)
                 except Exception as e:
                     print(f"Error: {e}")
                     time.sleep(2)

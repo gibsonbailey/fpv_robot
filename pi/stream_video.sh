@@ -21,10 +21,24 @@ PORT=5253
 
 # Make POST request to 192.168.0.14:4337
 # Get the server_ip out of the json response store it in IP_ADDRESS
-IP_ADDRESS=$(curl -s -H "Content-Type: application/json" -X POST http://192.168.0.14:4337/client | jq -r '.server_ip')
+LOCAL_IP=$(ifconfig | grep 'inet 192.168.0' | awk '{print $2}' | cut -d/ -f1)
+echo "LOCAL_IP: $LOCAL_IP"
+PUBLIC_IP=$(curl -s https://api.ipify.org)
+
+# Example POST request
+# curl -X POST http://127.0.0.1:5000/client \
+#      -H "Content-Type: application/json" \
+#      -d '{
+#            "client_local_ip": "192.168.0.20",
+#            "client_public_ip": "123.45.67.89"
+#          }'
+
+IP_ADDRESS=$(curl -s -X POST http://192.168.0.14:4337 -H "Content-Type: application/json" -d "{\"client_local_ip\": \"$LOCAL_IP\", \"client_public_ip\": \"$PUBLIC_IP\"}" | jq -r '.server_ip')
 
 echo "IP_ADDRESS: $IP_ADDRESS"
 echo "PORT: $PORT"
+
+exit
 
 
 # G Streamer (hardware encoded with v4l2h264enc)

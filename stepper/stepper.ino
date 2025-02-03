@@ -229,6 +229,8 @@ int32_t HEADER = 0xDEADBEEF;
 uint16_t test_val = 0;
 int increment = 1;
 
+unsigned long last_control_update = 0;
+
 void loop() {
     if (Serial.available()) {
         byte b = Serial.read();
@@ -277,14 +279,23 @@ void loop() {
             Serial.print("Steering: ");
             Serial.println(steering_value);
 
-            const float steering_yaw = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
+            const float steering_val = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
             const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 1.0f);
 
+            last_control_update = millis();
+
             // pin 9 (steering)
-            TCA0.SINGLE.CMP0 = mapSteering(steering_yaw);
+            TCA0.SINGLE.CMP0 = mapSteering(steering_val);
             // pin 10 (throttle)
             TCA0.SINGLE.CMP1 = mapThrottle(throttle_val);
         }
+    }
+
+    if (millis() - last_control_update > 400) {
+        // pin 9 (steering)
+        TCA0.SINGLE.CMP0 = mapSteering(0.5);
+        // pin 10 (throttle)
+        TCA0.SINGLE.CMP1 = mapThrottle(0.5);
     }
 
     stepper.run();

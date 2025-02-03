@@ -84,6 +84,9 @@ def run_headset_orientation_client():
     time_buffer_print_interval = 60
     time_buffer_print_index = 0
 
+    timeout_failure_window = [False] * 1000
+    timeout_failure_window_index = 0
+
     server_connection_data = get_controller_server_info()
 
     if server_connection_data is None:
@@ -95,15 +98,13 @@ def run_headset_orientation_client():
 
     # Create a socket connection to the server
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        # HOST = "0.0.0.0"  # Listen on all interfaces
-        # PORT = 12345  # Port to listen on
         try:
             s.connect((HOST, PORT))
         except ConnectionRefusedError:
             raise ControllerServerConnectionRefusedError(HOST, PORT)
         print(f"Server connected to {HOST}:{PORT}")
         while True:
-            data = recv_all(s, 16)
+            data = recv_all(s, 24)
             if not data:
                 break
 
@@ -116,15 +117,34 @@ def run_headset_orientation_client():
                     print(f"cam data {time_buffer_size / time_diff} Hz")
 
             try:
-                pitch, yaw, throttle, steering = struct.unpack("<ffff", data)
+                timestamp, pitch, yaw, throttle, steering = struct.unpack(
+                    "<Qffff",  # < means little-endian. Q means unsigned long long (8 bytes), f means float (4 bytes)
+                    data,
+                )
             except ValueError:
-                print("Invalid data format: must be float")
+                print("Invalid data format from control server")
                 continue
-            send_command_to_arduino(-pitch, -yaw, throttle, steering)
+
+            # Check if timestamp is within the last 500ms
+            timeout_failure = time.time() - timestamp / 1000 > 0.5
+
+            timeout_failure_window[
+                timeout_failure_window_index % len(timeout_failure_window)
+            ] = timeout_failure
+            timeout_failure_window_index += 1
+
+            # Throw out stale packets
+            if timeout_failure:
+                continue
+
+            # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
                 print(
-                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}"
+                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
                 )
+
+            # If all is well, send the data to the Arduino
+            send_command_to_arduino(-pitch, -yaw, throttle, steering)
 
 
 def validate_and_send_command_to_arduino(message):

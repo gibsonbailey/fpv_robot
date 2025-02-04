@@ -1,4 +1,6 @@
 set -x
+sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+
 sudo systemctl stop ModemManager
 sudo systemctl stop NetworkManager
 
@@ -12,9 +14,10 @@ sudo udhcpc -q -f -i wwan0
 
 sudo ip route
 
+sudo systemctl start NetworkManager
+
+# sudo ip route del default via 192.168.0.1 dev wlan0
+
 sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
 
-sudo ip route del default via 192.168.0.1 dev wlan0
-
-sudo systemctl start NetworkManager
 set +x

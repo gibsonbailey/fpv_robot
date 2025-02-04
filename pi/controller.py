@@ -7,8 +7,6 @@ import time
 import threading
 import serial
 
-# from pynput import keyboard
-
 
 # Run the bash command as a single subprocess
 arduino_port = subprocess.run(
@@ -37,8 +35,8 @@ def recv_all(sock, length):
 
 
 def get_controller_server_info():
-    CONNECTION_SERVICE_IP = "127.0.0.1"
-    CONNECTION_SERVICE_PORT = 5000
+    CONNECTION_SERVICE_IP = "3.215.138.208"
+    CONNECTION_SERVICE_PORT = 4337
 
     client_local_ip = socket.gethostbyname(socket.gethostname())
     client_public_ip = requests.get("https://api.ipify.org").text
@@ -86,6 +84,9 @@ def run_headset_orientation_client():
     time_buffer_print_interval = 60
     time_buffer_print_index = 0
 
+    timeout_failure_window = [False] * 1000
+    timeout_failure_window_index = 0
+
     server_connection_data = get_controller_server_info()
 
     if server_connection_data is None:
@@ -94,18 +95,16 @@ def run_headset_orientation_client():
 
     HOST = server_connection_data["server_ip"]
     PORT = int(server_connection_data["server_port"])
-    # Create a socket connection to the server
 
+    # Create a socket connection to the server
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        # HOST = "0.0.0.0"  # Listen on all interfaces
-        # PORT = 12345  # Port to listen on
         try:
             s.connect((HOST, PORT))
         except ConnectionRefusedError:
             raise ControllerServerConnectionRefusedError(HOST, PORT)
         print(f"Server connected to {HOST}:{PORT}")
         while True:
-            data = recv_all(s, 16)
+            data = recv_all(s, 24)
             if not data:
                 break
 
@@ -118,15 +117,34 @@ def run_headset_orientation_client():
                     print(f"cam data {time_buffer_size / time_diff} Hz")
 
             try:
-                pitch, yaw, throttle, steering = struct.unpack("<ffff", data)
+                timestamp, pitch, yaw, throttle, steering = struct.unpack(
+                    "<Qffff",  # < means little-endian. Q means unsigned long long (8 bytes), f means float (4 bytes)
+                    data,
+                )
             except ValueError:
-                print("Invalid data format: must be float")
+                print("Invalid data format from control server")
                 continue
-            send_command_to_arduino(-pitch, -yaw, throttle, steering)
+
+            # Check if timestamp is within the last 500ms
+            timeout_failure = time.time() - timestamp / 1000 > 0.5
+
+            timeout_failure_window[
+                timeout_failure_window_index % len(timeout_failure_window)
+            ] = timeout_failure
+            timeout_failure_window_index += 1
+
+            # Throw out stale packets
+            if timeout_failure:
+                continue
+
+            # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
                 print(
-                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}"
+                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
                 )
+
+            # If all is well, send the data to the Arduino
+            send_command_to_arduino(-pitch, -yaw, throttle, steering)
 
 
 def validate_and_send_command_to_arduino(message):
@@ -140,19 +158,7 @@ def validate_and_send_command_to_arduino(message):
     send_command_to_arduino(pitch, yaw, 0, 0)
 
 
-last_sent_pitch = 0
-last_sent_yaw = 0
-
-
 def send_command_to_arduino(pitch, yaw, throttle, steering):
-    # Only send the command if it's different from the last one
-    # global last_sent_pitch
-    # global last_sent_yaw
-    # if pitch == last_sent_pitch and yaw == last_sent_yaw and throttle
-    #     return
-    # last_sent_pitch = pitch
-    # last_sent_yaw = yaw
-
     # 0xDEADBEEF as a header
     ready_to_send_bytes = struct.pack(
         "<Iffff", 0xDEADBEEF, pitch, yaw, throttle, steering
@@ -165,38 +171,6 @@ def send_command_to_arduino(pitch, yaw, throttle, steering):
     # print(f"Sent: {pitch_bytes} {yaw_bytes}")
 
 
-# A set to store currently pressed keys
-pressed_keys = set()
-
-
-# Callback function for key press
-def on_press(key):
-    try:
-        pressed_keys.add(key.char)  # Add the key to the set if it's a character
-    except AttributeError:
-        pressed_keys.add(key)  # Add special keys (like space, ctrl, etc.)
-
-
-# Callback function for key release
-def on_release(key):
-    try:
-        pressed_keys.discard(key.char)  # Remove the key from the set
-    except AttributeError:
-        pressed_keys.discard(key)  # Handle special keys (like space, ctrl, etc.)
-
-
-# Start listening for key press and release events
-# listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-# listener.start()
-
-# Desired loop rate
-frame_rate = 200
-frame_time = 1 / frame_rate
-
-g_pitch = 0
-g_yaw = 0
-
-
 # Create a thread that listens for data from the Arduino
 def read_from_arduino():
     while True:
@@ -206,66 +180,24 @@ def read_from_arduino():
             # print(f"Received: {data}")
 
 
-# Continuously wait for a key press to send data
 try:
     # Start the thread that listens for data from the Arduino
     read_thread = threading.Thread(target=read_from_arduino)
     read_thread.start()
 
-    print('Calibrate the robot by sending pitch and yaw. Then enter "next".')
     while True:
-        command = input("Enter two integers for pitch and yaw respectively:\n")
+        failure_delay = 4
+        try:
+            run_headset_orientation_client()
+        # In the case of failed connection
+        except ControllerServerConnectionRefusedError as e:
+            print(f"Connection refused by server at {e.ip}:{e.port}")
+            time.sleep(failure_delay)
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(failure_delay)
 
-        # headset
-        if command == "h":
-            while True:
-                failure_delay = 4
-                try:
-                    run_headset_orientation_client()
-                # In the case of failed connection
-                except ControllerServerConnectionRefusedError as e:
-                    print(f"Connection refused by server at {e.ip}:{e.port}")
-                    time.sleep(failure_delay)
-                except Exception as e:
-                    print(f"Error: {e}")
-                    time.sleep(failure_delay)
-
-        if command == "next":
-            print("entered live mode")
-            break
-        validate_and_send_command_to_arduino(command)
-    while True:
-        pitch_delta = 5
-        yaw_delta = 5
-
-        # Print the keys that are currently being held down
-        if pressed_keys:
-            adjusted_pitch_delta = pitch_delta
-            adjusted_yaw_delta = yaw_delta
-
-            if keyboard.Key.shift in pressed_keys:
-                shift_adjustment = 0.2
-                adjusted_pitch_delta *= shift_adjustment
-                adjusted_yaw_delta *= shift_adjustment
-
-            if keyboard.Key.down in pressed_keys:
-                g_pitch += adjusted_pitch_delta
-            if keyboard.Key.up in pressed_keys:
-                g_pitch -= adjusted_pitch_delta
-            if keyboard.Key.right in pressed_keys:
-                g_yaw -= adjusted_yaw_delta
-            if keyboard.Key.left in pressed_keys:
-                g_yaw += adjusted_yaw_delta
-
-            g_pitch = int(g_pitch)
-            g_yaw = int(g_yaw)
-
-            send_command_to_arduino(g_pitch, g_yaw, 0, 0)
-
-        # Wait for the next frame
-        time.sleep(frame_time)
 except KeyboardInterrupt:
     print("Program stopped.")
-    # listener.stop()
 finally:
     ser.close()  # Close the serial port when done

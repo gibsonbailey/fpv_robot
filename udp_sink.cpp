@@ -9,18 +9,77 @@ extern "C" {
     #include <libavutil/imgutils.h>
 }
 
+// Read callback for the in-memory buffer
+static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
+    struct BufferData {
+        const uint8_t *ptr;
+        size_t size;
+    };
+    BufferData *bd = (BufferData *)opaque;
+    int len = FFMIN(buf_size, bd->size);
+    if(len == 0)
+        return AVERROR_EOF;
+    memcpy(buf, bd->ptr, len);
+    bd->ptr  += len;
+    bd->size -= len;
+    return len;
+}
 
 int main() {
     std::cout << "Starting UDP video stream receiver..." << std::endl;
 
     avformat_network_init();
 
-    const char* url = "udp://@:5253";  // Listen on all network interfaces, port 5253
+    // SDP description embedded as a string.
+    const char *sdp_data =
+        "v=0\n"
+        // "o=- 0 0 IN IP4 192.168.0.22\n"   // Use the streaming machine's IP.
+        "o=- 0 0 IN IP4 0.0.0.0\n"   // Use the streaming machine's IP.
+        "s=No Name\n"
+        // "c=IN IP4 192.168.1.22\n"
+        "c=IN IP4 0.0.0.0\n"
+        "t=0 0\n"
+        "a=tool:libavformat\n"
+        "m=video 5253 RTP/AVP 96\n"
+        "a=rtpmap:96 H264/90000\n";
 
-    std::cout << "Opening UDP stream: " << url << std::endl;
+    // Initialize buffer data structure
+    struct BufferData {
+        const uint8_t *ptr;
+        size_t size;
+    } bd;
+    bd.ptr = (const uint8_t*)sdp_data;
+    bd.size = strlen(sdp_data);
 
-    AVFormatContext* formatContext = nullptr;
-    if (avformat_open_input(&formatContext, url, nullptr, nullptr) != 0) {
+    // Allocate buffer for AVIOContext (you can choose an appropriate size)
+    const int buffer_size = 4096;
+    uint8_t *avio_buffer = (uint8_t*)av_malloc(buffer_size);
+    if (!avio_buffer) {
+        std::cerr << "Could not allocate avio buffer." << std::endl;
+        return -1;
+    }
+
+    // Create custom AVIOContext.
+    AVIOContext *avio_ctx = avio_alloc_context(
+        avio_buffer, buffer_size,
+        0, // write_flag = 0 (read-only)
+        &bd, // opaque pointer to our BufferData
+        read_packet, // our read callback
+        nullptr, // no write callback
+        nullptr  // no seek callback
+    );
+    if (!avio_ctx) {
+        std::cerr << "Could not allocate AVIOContext." << std::endl;
+        av_free(avio_buffer);
+        return -1;
+    }
+
+    std::cout << "Opening UDP stream: " << "SDP" << std::endl;
+
+    AVFormatContext* formatContext = avformat_alloc_context();
+    formatContext->pb = avio_ctx;
+
+    if (avformat_open_input(&formatContext, nullptr, nullptr, nullptr) != 0) {
         std::cerr << "Error: Could not open UDP stream." << std::endl;
         return -1;
     }
@@ -144,6 +203,10 @@ end:
     av_packet_free(&packet);
     avcodec_free_context(&codecContext);
     avformat_close_input(&formatContext);
+    if (avio_ctx) {
+        av_freep(&avio_ctx->buffer);
+        avio_context_free(&avio_ctx);
+    }
     avformat_network_deinit();
 
     return 0;

@@ -103,7 +103,7 @@ def client_endpoint():
     else:
         server_ip = server_public_ip
 
-    print(f"Suggested server IP: {server_ip}")
+    print(f"Suggested server IP: {server_ip} ({'Same' if client_public_ip == server_public_ip else 'Different'} public IP)")
 
     return jsonify({
         'server_ip': server_ip,

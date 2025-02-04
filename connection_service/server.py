@@ -69,6 +69,8 @@ def client_endpoint():
     if not (client_local_ip and client_public_ip):
         return jsonify({'error': 'Missing client_local_ip/client_public_ip'}), 400
 
+    print(f"Received client data: {client_local_ip}, {client_public_ip}")
+
     # Store client info
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
@@ -100,6 +102,8 @@ def client_endpoint():
         server_ip = server_local_ip
     else:
         server_ip = server_public_ip
+
+    print(f"Suggested server IP: {server_ip}")
 
     return jsonify({
         'server_ip': server_ip,

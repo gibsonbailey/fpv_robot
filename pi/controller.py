@@ -81,7 +81,7 @@ def run_headset_orientation_client():
     # dequeue for time buffer
     time_buffer = collections.deque(maxlen=time_buffer_size)
 
-    time_buffer_print_interval = 10
+    time_buffer_print_interval = 60
     time_buffer_print_index = 0
 
     timeout_failure_window = [False] * 1000
@@ -139,12 +139,16 @@ def run_headset_orientation_client():
             
             # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
-                print(
-                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
-                )
+                # print(
+                #     f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
+                # )
+                pass
 
             # Check if timestamp is within the last 500ms
             timeout_failure = time.time() - timestamp / 1000 > 0.5
+
+            if time_buffer_print_index % 3 == 0:
+                print('time lag', time.time() - timestamp / 1000)
 
             timeout_failure_window[
                 timeout_failure_window_index % len(timeout_failure_window)

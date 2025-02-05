@@ -99,9 +99,14 @@ def run_headset_orientation_client():
     PORT = int(server_connection_data["server_port"])
 
     # Create a socket connection to the server
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(3)  # Set a timeout for the connection attempt
+    with sock as s:
         try:
             s.connect((HOST, PORT))
+        except socket.timeout:
+            print('Socket timed out')
+            raise ControllerServerConnectionRefusedError(HOST, PORT)
         except ConnectionRefusedError:
             raise ControllerServerConnectionRefusedError(HOST, PORT)
         print(f"Server connected to {HOST}:{PORT}")

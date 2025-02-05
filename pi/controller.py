@@ -81,7 +81,7 @@ def run_headset_orientation_client():
     # dequeue for time buffer
     time_buffer = collections.deque(maxlen=time_buffer_size)
 
-    time_buffer_print_interval = 60
+    time_buffer_print_interval = 10
     time_buffer_print_index = 0
 
     timeout_failure_window = [False] * 1000
@@ -124,13 +124,24 @@ def run_headset_orientation_client():
                     print(f"cam data {time_buffer_size / time_diff} Hz")
 
             try:
+                print('trying to unpack')
                 timestamp, pitch, yaw, throttle, steering = struct.unpack(
                     "<Qffff",  # < means little-endian. Q means unsigned long long (8 bytes), f means float (4 bytes)
                     data,
                 )
+                print('unpacked')
             except ValueError:
                 print("Invalid data format from control server")
                 continue
+            except Exception:
+                print('other exception')
+                continue
+            
+            # Intermittently show the data for sanity check
+            if time_buffer_print_index % time_buffer_print_interval == 0:
+                print(
+                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
+                )
 
             # Check if timestamp is within the last 500ms
             timeout_failure = time.time() - timestamp / 1000 > 0.5
@@ -144,11 +155,6 @@ def run_headset_orientation_client():
             if timeout_failure:
                 continue
 
-            # Intermittently show the data for sanity check
-            if time_buffer_print_index % time_buffer_print_interval == 0:
-                print(
-                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
-                )
 
             # If all is well, send the data to the Arduino
             send_command_to_arduino(-pitch, -yaw, throttle, steering)

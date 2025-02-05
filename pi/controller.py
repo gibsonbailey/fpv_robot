@@ -139,16 +139,15 @@ def run_headset_orientation_client():
             
             # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
-                # print(
-                #     f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {sum(timeout_failure_window) / len(timeout_failure_window)}"
-                # )
-                pass
+                print(
+                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {(sum(timeout_failure_window) / len(timeout_failure_window)) * 100:.1f}%"
+                )
 
             # Check if timestamp is within the last 500ms
-            timeout_failure = time.time() - timestamp / 1000 > 0.5
+            timeout_failure = (time.time() - timestamp) / 1000 > 0.5
 
             if time_buffer_print_index % 3 == 0:
-                print('time lag', time.time() - timestamp / 1000)
+                print('time lag', (time.time() - timestamp) / 1000)
 
             timeout_failure_window[
                 timeout_failure_window_index % len(timeout_failure_window)

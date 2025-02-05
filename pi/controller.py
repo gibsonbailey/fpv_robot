@@ -92,6 +92,8 @@ def run_headset_orientation_client():
     if server_connection_data is None:
         print("Failed to get controller server info")
         return
+    
+    print(f"Connecting to server at {server_connection_data['server_ip']}:{server_connection_data['server_port']}")
 
     HOST = server_connection_data["server_ip"]
     PORT = int(server_connection_data["server_port"])

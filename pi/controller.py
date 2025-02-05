@@ -87,13 +87,18 @@ def run_headset_orientation_client():
     timeout_failure_window = [False] * 1000
     timeout_failure_window_index = 0
 
+    time_lag_ms_window = [0] * 1000
+    time_lag_ms_window_index = 0
+
     server_connection_data = get_controller_server_info()
 
     if server_connection_data is None:
         print("Failed to get controller server info")
         return
-    
-    print(f"Connecting to server at {server_connection_data['server_ip']}:{server_connection_data['server_port']}")
+
+    print(
+        f"Connecting to server at {server_connection_data['server_ip']}:{server_connection_data['server_port']}"
+    )
 
     HOST = server_connection_data["server_ip"]
     PORT = int(server_connection_data["server_port"])
@@ -105,7 +110,7 @@ def run_headset_orientation_client():
         try:
             s.connect((HOST, PORT))
         except socket.timeout:
-            print('Socket timed out')
+            print("Socket timed out")
             raise ControllerServerConnectionRefusedError(HOST, PORT)
         except ConnectionRefusedError:
             raise ControllerServerConnectionRefusedError(HOST, PORT)
@@ -124,40 +129,46 @@ def run_headset_orientation_client():
                     print(f"cam data {time_buffer_size / time_diff} Hz")
 
             try:
-                print('trying to unpack')
-                timestamp, pitch, yaw, throttle, steering = struct.unpack(
+                timestamp_ms, pitch, yaw, throttle, steering = struct.unpack(
                     "<Qffff",  # < means little-endian. Q means unsigned long long (8 bytes), f means float (4 bytes)
                     data,
                 )
-                print('unpacked')
             except ValueError:
                 print("Invalid data format from control server")
                 continue
             except Exception:
-                print('other exception')
+                print("other exception")
                 continue
-            
+
             # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
                 print(
                     f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {(sum(timeout_failure_window) / len(timeout_failure_window)) * 100:.1f}%"
                 )
 
-            # Check if timestamp is within the last 500ms
-            timeout_failure = (time.time() - timestamp) / 1000 > 0.5
+            failure_threshold = min(time_lag_ms_window) + 500
+
+            time_lag_ms = (time.time() * 1000) - timestamp_ms
+
+            # Check if timestamp is too old
+            timeout_failure = time_lag_ms > failure_threshold
 
             if time_buffer_print_index % 3 == 0:
-                print('time lag', (time.time() - timestamp) / 1000)
+                print("time lag", int(time_lag_ms), "ms")
 
             timeout_failure_window[
                 timeout_failure_window_index % len(timeout_failure_window)
             ] = timeout_failure
             timeout_failure_window_index += 1
 
+            time_lag_ms_window[time_lag_ms_window_index % len(time_lag_ms_window)] = (
+                time_lag_ms
+            )
+            time_lag_ms_window_index += 1
+
             # Throw out stale packets
             if timeout_failure:
                 continue
-
 
             # If all is well, send the data to the Arduino
             send_command_to_arduino(-pitch, -yaw, throttle, steering)

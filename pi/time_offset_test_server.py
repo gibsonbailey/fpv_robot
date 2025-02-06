@@ -15,7 +15,42 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         with conn:
             print("Connected by", addr)
 
-            for i in range(2):
+            offsets = []
+
+            print("Calibrating time offset...")
+
+            for i in range(50):
+                pitch = 0.0
+                yaw = 0.0
+                throttle = 0.0
+                steering = 0.0
+
+                t1 = int(time.time() * 1000)
+
+                data = struct.pack(
+                    "<Qffff",
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                )
+                conn.sendall(data)
+                data = conn.recv(1024)
+
+                t4 = int(time.time() * 1000)
+
+                t = struct.unpack("<Q", data)[0]
+
+                offset = ((t - t1) - (t - t4)) / 2
+                offsets.append(offset)
+                # print(f"offset: {offset}")
+                time.sleep(0.1)
+
+            avg_offset = sum(offsets) / len(offsets)
+            print(f"avg_offset: {avg_offset}")
+
+            for i in range(5):
                 pitch = 0.0
                 yaw = 0.0
                 throttle = 0.0
@@ -38,18 +73,22 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
 
                 response = json.loads(data.decode("utf-8"))
 
-                t2 = response["t2"]
-                t3 = response["t3"]
+                t4 = int(time.time() * 1000)
+
+                t = struct.unpack("<Q", data)[0]
+
+                offset = ((t - t1) - (t - t4)) / 2
 
                 print()
-                print(f"t1: {t1}")
-                print(f"t2: {t2}")
-                print(f"t3: {t3}")
-                print(f"t4: {t4}")
+                print(f"start: {t1}")
+                print(f"other_recv: {t}")
+                print(f"other_send: {t}")
+                print(f"end: {t4}")
 
-                offset = ((t2 - t1) - (t4 - t3)) / 2
+                offset = ((t - t1) - (t - t4)) / 2
+                offsets.append(offset)
                 print(f"offset: {offset}")
-            exit()
+                time.sleep(1)
 
             while True:
                 # Send data which can be unpacked like this:

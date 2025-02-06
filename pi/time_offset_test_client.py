@@ -126,10 +126,8 @@ def run_headset_orientation_client():
 
             if all(x == 0 for x in [timestamp_ms, pitch, yaw, throttle, steering]):
                 # this is a time offset measurement
-                t2 = int(time.time() * 1000)
-                t3 = int(time.time() * 1000)
-                data = json.dumps({"t2": t2, "t3": t3}).encode("utf-8")
-                s.sendall(data)
+                t = int(time.time() * 1000)
+                s.sendall(struct.pack("<Q", t))
                 continue
 
             # Intermittently show the data for sanity check

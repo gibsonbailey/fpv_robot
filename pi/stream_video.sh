@@ -44,11 +44,11 @@ do
     queue ! \
     videoscale ! video/x-raw,width=428,height=240 ! \
     queue leaky=2 max-size-buffers=$QUEUE_SIZE ! \
-    v4l2h264enc ! 'video/x-h264,level=(string)3' ! h264parse config-interval=1 ! \
+    v4l2h264enc extra-controls="cid,h264_i_frame_period=15,h264_b_frame_count=0,h264_minimum_qp_value=20,h264_maximum_qp_value=20" ! 'video/x-h264,level=(string)3' ! \
+    h264parse config-interval=1 ! \
     queue leaky=2 max-size-buffers=$QUEUE_SIZE ! \
     rtph264pay config-interval=1 pt=96 ! \
     udpsink host=$IP_ADDRESS port=$PORT sync=false
-    #queue leaky=2 max-size-buffers=$QUEUE_SIZE ! \
 
   echo "GStreamer exited. Restarting in 5 seconds..."
   sleep 5

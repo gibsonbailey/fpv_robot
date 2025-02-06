@@ -140,6 +140,11 @@ def run_headset_orientation_client():
                 print("other exception")
                 continue
 
+            if all(x == 0 for x in [timestamp_ms, pitch, yaw, throttle, steering]):
+                # this is a time offset measurement
+                s.sendall(struct.pack("<Q", int(time.time() * 1000)))
+                continue
+
             # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
                 print(

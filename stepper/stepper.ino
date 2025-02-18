@@ -1,6 +1,8 @@
 #include <AccelStepper.h>
 #include <TMCStepper.h>
+#include "hall_effect_sensor.h"
 
+HallSensor hallSensor(8, 10, 100000); // Pin 2, buffer size 10, valid window 100us
 
 #define dirPin 21
 #define stepPin 19
@@ -25,7 +27,7 @@ TMC2209Stepper yawDriver(&Serial1, R_sense, YAW_DRIVER_ADDRESS);
 
 const int MAX_SPEED = 3000;
 const int MAX_ACCELERATION = 10000;
-const int BAUD_RATE = 9600;
+const int TMC2209_BAUD_RATE = 9600;
 const int MICROSTEPS = 4;
 
 
@@ -46,7 +48,7 @@ int degrees_to_microsteps(float degrees) {
 }
 
 void prepare_driver(TMC2209Stepper& driver) {
-  driver.beginSerial(BAUD_RATE);
+  driver.beginSerial(TMC2209_BAUD_RATE);
   // Prepare for UART communication
   driver.pdn_disable(true);
   driver.mstep_reg_select(true);
@@ -145,7 +147,7 @@ uint16_t mapThrottle(float fraction) {
 void setup() {
   // Initialize Serial1 and set up drivers immediately, otherwise
   // the current will not be limited on start up and the motors may get hot.
-  Serial1.begin(BAUD_RATE);
+  Serial1.begin(TMC2209_BAUD_RATE);
 
   while (!Serial1) {
     ;
@@ -175,7 +177,8 @@ void setup() {
   pinMode(9, OUTPUT); // TCA channel 0
   pinMode(10, OUTPUT); // TCA channel 1
 
-  noInterrupts();      // Disable interrupts during setup
+   // Disable interrupts during setup
+  noInterrupts();
 
   // Set up TCA0 for 50 Hz PWM on channels 0 & 1
 
@@ -208,10 +211,10 @@ void setup() {
   //                   | TCA_SINGLE_ENABLE_bm;
 
   interrupts();        // Re-enable interrupts
-}
 
-int dir = -1;
-int yawDir = 1;
+  // Set up hall effect sensor
+  hallSensor.begin();
+}
 
 int counter = 0;
 
@@ -300,4 +303,21 @@ void loop() {
 
     stepper.run();
     yawStepper.run();
+
+    if (counter % 1000 == 0) {
+        float frequency = hallSensor.getFrequency();
+        float distance = hallSensor.getDistance();
+        float speed = hallSensor.getSpeed();
+        Serial.print("Frequency: ");
+        Serial.print(frequency);
+        Serial.print(" Hz");
+        Serial.print(", distance: ");
+        Serial.print(distance);
+        Serial.print(" inches");
+        Serial.print(", speed: ");
+        Serial.print(speed);
+        Serial.println(" mph");
+    }
+
+    counter++;
 }

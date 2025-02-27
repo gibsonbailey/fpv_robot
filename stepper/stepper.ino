@@ -1,6 +1,8 @@
 #include <AccelStepper.h>
 #include <TMCStepper.h>
+#include "hall_effect_sensor.h"
 
+HallSensor hallSensor(8, 10, 100000); // Pin 2, buffer size 10, valid window 100us
 
 #define dirPin 21
 #define stepPin 19
@@ -23,11 +25,10 @@ AccelStepper yawStepper(AccelStepper::DRIVER, yawStepPin, yawDirPin);
 TMC2209Stepper yawDriver(&Serial1, R_sense, YAW_DRIVER_ADDRESS);
 
 
-const int MAX_SPEED = 3000;
-const int MAX_ACCELERATION = 10000;
-const int BAUD_RATE = 9600;
+const int MAX_STEPPER_SPEED = 3000;
+const int MAX_STEPPER_ACCELERATION = 10000;
+const int TMC2209_BAUD_RATE = 9600;
 const int MICROSTEPS = 4;
-
 
 int degrees_to_microsteps(float degrees) {
     // MICROSTEPS microsteps per step
@@ -46,7 +47,7 @@ int degrees_to_microsteps(float degrees) {
 }
 
 void prepare_driver(TMC2209Stepper& driver) {
-  driver.beginSerial(BAUD_RATE);
+  driver.beginSerial(TMC2209_BAUD_RATE);
   // Prepare for UART communication
   driver.pdn_disable(true);
   driver.mstep_reg_select(true);
@@ -58,11 +59,11 @@ void prepare_driver(TMC2209Stepper& driver) {
 // Optional argument for slow acceleration
 void prepare_stepper(AccelStepper& stepper, bool slow = false) {
   if (slow) {
-    stepper.setMaxSpeed(static_cast<float>(MAX_SPEED));// / (75.0f / 30.0f) / 1.1f);
-    stepper.setAcceleration(static_cast<float>(MAX_ACCELERATION) / (75.0f / 30.0f) / 1.1f);
+    stepper.setMaxSpeed(static_cast<float>(MAX_STEPPER_SPEED));// / (75.0f / 30.0f) / 1.1f);
+    stepper.setAcceleration(static_cast<float>(MAX_STEPPER_ACCELERATION) / (75.0f / 30.0f) / 1.1f);
   } else {
-    stepper.setMaxSpeed(MAX_SPEED);
-    stepper.setAcceleration(MAX_ACCELERATION);
+    stepper.setMaxSpeed(MAX_STEPPER_SPEED);
+    stepper.setAcceleration(MAX_STEPPER_ACCELERATION);
   }
 }
 
@@ -145,7 +146,7 @@ uint16_t mapThrottle(float fraction) {
 void setup() {
   // Initialize Serial1 and set up drivers immediately, otherwise
   // the current will not be limited on start up and the motors may get hot.
-  Serial1.begin(BAUD_RATE);
+  Serial1.begin(TMC2209_BAUD_RATE);
 
   while (!Serial1) {
     ;
@@ -175,7 +176,8 @@ void setup() {
   pinMode(9, OUTPUT); // TCA channel 0
   pinMode(10, OUTPUT); // TCA channel 1
 
-  noInterrupts();      // Disable interrupts during setup
+   // Disable interrupts during setup
+  noInterrupts();
 
   // Set up TCA0 for 50 Hz PWM on channels 0 & 1
 
@@ -208,10 +210,10 @@ void setup() {
   //                   | TCA_SINGLE_ENABLE_bm;
 
   interrupts();        // Re-enable interrupts
-}
 
-int dir = -1;
-int yawDir = 1;
+  // Set up hall effect sensor
+  hallSensor.begin();
+}
 
 int counter = 0;
 
@@ -232,6 +234,24 @@ int increment = 1;
 unsigned long last_control_update = 0;
 
 void loop() {
+    if (counter % 1000 == 0) {
+        // float frequency = hallSensor.getFrequency();
+        // float distance = hallSensor.getDistance();
+        float speed = hallSensor.getSpeed();
+        // Serial.print("Frequency: ");
+        // Serial.print(frequency);
+        // Serial.print(" Hz");
+        // Serial.print(", distance: ");
+        // Serial.print(distance);
+        // Serial.print(" inches");
+        // Serial.print(", speed: ");
+        Serial.print("speed: ");
+        Serial.print(speed);
+        Serial.println(" mph");
+    }
+
+    counter++;
+
     if (Serial.available()) {
         byte b = Serial.read();
         if (serial_buffer_index < buffer_size) {
@@ -278,6 +298,12 @@ void loop() {
             Serial.println(throttle_value);
             Serial.print("Steering: ");
             Serial.println(steering_value);
+            
+            // Adjust steering angle based on speed
+            float speed = hallSensor.getSpeed();
+            if (speed > 5) {
+                steering_value = steering_value * 0.5;
+            }
 
             const float steering_val = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
             const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 1.0f);

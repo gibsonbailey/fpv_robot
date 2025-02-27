@@ -120,7 +120,10 @@ def run_headset_orientation_client():
         # Start the thread that listens for data from the Arduino
         global READ_FROM_ARDUINO_THREAD_ENABLED
         READ_FROM_ARDUINO_THREAD_ENABLED = True
-        arduino_read_thread = threading.Thread(target=read_from_arduino)
+        arduino_read_thread = threading.Thread(
+            target=read_from_arduino,
+            args=(s,),
+        )
         arduino_read_thread.start()
 
         while True:
@@ -150,7 +153,7 @@ def run_headset_orientation_client():
 
             if all(x == 0 for x in [timestamp_ms, pitch, yaw, throttle, steering]):
                 # this is a time offset measurement
-                s.sendall(struct.pack("<Q", int(time.time() * 1000)))
+                s.sendall(struct.pack("<Qff", int(time.time() * 1000), 0, 0))
                 continue
 
             # Intermittently show the data for sanity check
@@ -214,14 +217,17 @@ def send_command_to_arduino(pitch, yaw, throttle, steering):
 
 
 # Create a thread that listens for data from the Arduino
-def read_from_arduino():
+def read_from_arduino(active_socket):
     while READ_FROM_ARDUINO_THREAD_ENABLED:
         data = ser.readline().decode("utf-8").strip()
         if data:
             print(f"Received: {data}")
-            if data.startswith("speed"):
-                speed = float(data.split(" ")[1])
-                print(f"Parsed speed: {speed}")
+            if data.startswith("tel:"):
+                _, speed_mph, distance_ft = data.split(" ")
+                speed_mph = float(speed_mph)
+                distance_ft = float(distance_ft)
+                print(f"Parsed speed: {speed_mph} mph, distance: {distance_ft} ft")
+                active_socket.sendall(struct.pack("<Qff", 0, speed_mph, distance_ft))
 
 
 try:

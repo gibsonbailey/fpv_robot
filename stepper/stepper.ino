@@ -2,7 +2,7 @@
 #include <TMCStepper.h>
 #include "hall_effect_sensor.h"
 
-HallSensor hallSensor(8, 10, 100000); // Pin 2, buffer size 10, valid window 100us
+HallSensor hallSensor(5, 10, 100000); // Pin 2, buffer size 10, valid window 100us
 
 #define dirPin 21
 #define stepPin 19
@@ -236,7 +236,7 @@ unsigned long last_control_update = 0;
 void loop() {
     if (counter % 1000 == 0) {
         // float frequency = hallSensor.getFrequency();
-        // float distance = hallSensor.getDistance();
+        float distance = hallSensor.getDistance();
         float speed = hallSensor.getSpeed();
         // Serial.print("Frequency: ");
         // Serial.print(frequency);
@@ -245,9 +245,11 @@ void loop() {
         // Serial.print(distance);
         // Serial.print(" inches");
         // Serial.print(", speed: ");
-        Serial.print("speed: ");
+        Serial.print("tel: ");
         Serial.print(speed);
-        Serial.println(" mph");
+        Serial.print(" ");
+        Serial.print(distance / 12); // inches to feet
+        Serial.println();
     }
 
     counter++;

@@ -25,11 +25,10 @@ AccelStepper yawStepper(AccelStepper::DRIVER, yawStepPin, yawDirPin);
 TMC2209Stepper yawDriver(&Serial1, R_sense, YAW_DRIVER_ADDRESS);
 
 
-const int MAX_SPEED = 3000;
-const int MAX_ACCELERATION = 10000;
+const int MAX_STEPPER_SPEED = 3000;
+const int MAX_STEPPER_ACCELERATION = 10000;
 const int TMC2209_BAUD_RATE = 9600;
 const int MICROSTEPS = 4;
-
 
 int degrees_to_microsteps(float degrees) {
     // MICROSTEPS microsteps per step
@@ -60,11 +59,11 @@ void prepare_driver(TMC2209Stepper& driver) {
 // Optional argument for slow acceleration
 void prepare_stepper(AccelStepper& stepper, bool slow = false) {
   if (slow) {
-    stepper.setMaxSpeed(static_cast<float>(MAX_SPEED));// / (75.0f / 30.0f) / 1.1f);
-    stepper.setAcceleration(static_cast<float>(MAX_ACCELERATION) / (75.0f / 30.0f) / 1.1f);
+    stepper.setMaxSpeed(static_cast<float>(MAX_STEPPER_SPEED));// / (75.0f / 30.0f) / 1.1f);
+    stepper.setAcceleration(static_cast<float>(MAX_STEPPER_ACCELERATION) / (75.0f / 30.0f) / 1.1f);
   } else {
-    stepper.setMaxSpeed(MAX_SPEED);
-    stepper.setAcceleration(MAX_ACCELERATION);
+    stepper.setMaxSpeed(MAX_STEPPER_SPEED);
+    stepper.setAcceleration(MAX_STEPPER_ACCELERATION);
   }
 }
 
@@ -235,6 +234,24 @@ int increment = 1;
 unsigned long last_control_update = 0;
 
 void loop() {
+    if (counter % 1000 == 0) {
+        // float frequency = hallSensor.getFrequency();
+        // float distance = hallSensor.getDistance();
+        float speed = hallSensor.getSpeed();
+        // Serial.print("Frequency: ");
+        // Serial.print(frequency);
+        // Serial.print(" Hz");
+        // Serial.print(", distance: ");
+        // Serial.print(distance);
+        // Serial.print(" inches");
+        // Serial.print(", speed: ");
+        Serial.print("speed: ");
+        Serial.print(speed);
+        Serial.println(" mph");
+    }
+
+    counter++;
+
     if (Serial.available()) {
         byte b = Serial.read();
         if (serial_buffer_index < buffer_size) {
@@ -281,6 +298,12 @@ void loop() {
             Serial.println(throttle_value);
             Serial.print("Steering: ");
             Serial.println(steering_value);
+            
+            // Adjust steering angle based on speed
+            float speed = hallSensor.getSpeed();
+            if (speed > 5) {
+                steering_value = steering_value * 0.5;
+            }
 
             const float steering_val = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
             const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 1.0f);
@@ -303,21 +326,4 @@ void loop() {
 
     stepper.run();
     yawStepper.run();
-
-    if (counter % 1000 == 0) {
-        float frequency = hallSensor.getFrequency();
-        float distance = hallSensor.getDistance();
-        float speed = hallSensor.getSpeed();
-        Serial.print("Frequency: ");
-        Serial.print(frequency);
-        Serial.print(" Hz");
-        Serial.print(", distance: ");
-        Serial.print(distance);
-        Serial.print(" inches");
-        Serial.print(", speed: ");
-        Serial.print(speed);
-        Serial.println(" mph");
-    }
-
-    counter++;
 }

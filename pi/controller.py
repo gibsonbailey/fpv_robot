@@ -18,6 +18,7 @@ arduino_port = subprocess.run(
 print(f"Arduino Port: {arduino_port}")
 baud_rate = 115200
 
+READ_FROM_ARDUINO_THREAD_ENABLED = False
 
 # Open the serial connection to the Arduino
 ser = serial.Serial(arduino_port, baud_rate)
@@ -115,6 +116,13 @@ def run_headset_orientation_client():
         except ConnectionRefusedError:
             raise ControllerServerConnectionRefusedError(HOST, PORT)
         print(f"Server connected to {HOST}:{PORT}")
+
+        # Start the thread that listens for data from the Arduino
+        global READ_FROM_ARDUINO_THREAD_ENABLED
+        READ_FROM_ARDUINO_THREAD_ENABLED = True
+        arduino_read_thread = threading.Thread(target=read_from_arduino)
+        arduino_read_thread.start()
+
         while True:
             data = recv_all(s, 24)
             if not data:
@@ -178,6 +186,8 @@ def run_headset_orientation_client():
             # If all is well, send the data to the Arduino
             send_command_to_arduino(-pitch, -yaw, throttle, steering)
 
+        arduino_read_thread.join()
+
 
 def validate_and_send_command_to_arduino(message):
     try:
@@ -205,17 +215,16 @@ def send_command_to_arduino(pitch, yaw, throttle, steering):
 
 # Create a thread that listens for data from the Arduino
 def read_from_arduino():
-    while True:
+    while READ_FROM_ARDUINO_THREAD_ENABLED:
         data = ser.readline().decode("utf-8").strip()
         if data:
-            pass
-            # print(f"Received: {data}")
+            print(f"Received: {data}")
+            if data.startswith("speed"):
+                speed = float(data.split(" ")[1])
+                print(f"Parsed speed: {speed}")
 
 
 try:
-    # Start the thread that listens for data from the Arduino
-    read_thread = threading.Thread(target=read_from_arduino)
-    read_thread.start()
 
     while True:
         failure_delay = 4

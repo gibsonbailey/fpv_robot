@@ -1,4 +1,5 @@
 import struct
+import random
 import requests
 import collections
 import socket
@@ -185,6 +186,9 @@ def run_headset_orientation_client():
             # Throw out stale packets
             if timeout_failure:
                 continue
+
+            if random.random() < 0.05:
+                print(f"all is well, {pitch} {yaw} {throttle} {steering}")
 
             # If all is well, send the data to the Arduino
             send_command_to_arduino(-pitch, -yaw, throttle, steering)

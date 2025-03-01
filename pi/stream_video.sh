@@ -19,6 +19,8 @@ CONNECTION_SERVICE_URL="http://3.215.138.208:4337/client"
 #            "client_public_ip": "123.45.67.89"
 #          }'
 
+PORT=5253
+
 while true
 do
   IP_ADDRESS=$(curl -s -X POST $CONNECTION_SERVICE_URL -H "Content-Type: application/json" -d "{\"client_local_ip\": \"$LOCAL_IP\", \"client_public_ip\": \"$PUBLIC_IP\"}" | jq -r '.server_ip')

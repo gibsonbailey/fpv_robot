@@ -83,7 +83,7 @@ def run_headset_orientation_client():
     # dequeue for time buffer
     time_buffer = collections.deque(maxlen=time_buffer_size)
 
-    time_buffer_print_interval = 60
+    time_buffer_print_interval = 200
     time_buffer_print_index = 0
 
     timeout_failure_window = [False] * 1000
@@ -104,6 +104,8 @@ def run_headset_orientation_client():
 
     HOST = server_connection_data["server_ip"]
     PORT = int(server_connection_data["server_port"])
+
+    HOST = '192.168.0.20'
 
     # Create a socket connection to the server
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -160,18 +162,18 @@ def run_headset_orientation_client():
             # Intermittently show the data for sanity check
             if time_buffer_print_index % time_buffer_print_interval == 0:
                 print(
-                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {(sum(timeout_failure_window) / len(timeout_failure_window)) * 100:.1f}%"
+                    f"pitch: {pitch}, yaw: {yaw}, throttle: {throttle}, steering: {steering}, timeout failure percentage: {(sum(timeout_failure_window) / len(timeout_failure_window)) * 100:.1f}% time_lag: {(sum(time_lag_ms_window) / len(time_lag_ms_window))}ms"
                 )
 
-            failure_threshold = min(time_lag_ms_window) + 500
+            failure_threshold = 500
 
             time_lag_ms = (time.time() * 1000) - timestamp_ms
 
             # Check if timestamp is too old
             timeout_failure = time_lag_ms > failure_threshold
 
-            if time_buffer_print_index % 3 == 0:
-                print("time lag", int(time_lag_ms), "ms")
+            if time_buffer_print_index % 1000 == 0:
+                print("time lag", int(time_lag_ms), "ms failure threshold", failure_threshold)
 
             timeout_failure_window[
                 timeout_failure_window_index % len(timeout_failure_window)
@@ -233,7 +235,6 @@ def read_from_arduino(active_socket):
 
 
 try:
-
     while True:
         failure_delay = 4
         try:

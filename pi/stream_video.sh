@@ -44,7 +44,7 @@ do
     libcamerasrc ! \
     v4l2convert ! video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! \
     queue ! \
-    videoscale ! video/x-raw,width=428,height=240 ! \
+    videoscale ! video/x-raw,width=720,height=402! \
     queue leaky=2 max-size-buffers=$QUEUE_SIZE ! \
     v4l2h264enc extra-controls="cid,h264_i_frame_period=15,h264_b_frame_count=0,h264_minimum_qp_value=20,h264_maximum_qp_value=20" ! 'video/x-h264,level=(string)3' ! \
     h264parse config-interval=1 ! \

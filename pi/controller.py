@@ -1,5 +1,4 @@
 import struct
-import random
 import requests
 import collections
 import socket
@@ -92,6 +91,8 @@ def run_headset_orientation_client():
     time_lag_ms_window = [0] * 1000
     time_lag_ms_window_index = 0
 
+    sequence_number = 0
+
     server_connection_data = get_controller_server_info()
 
     if server_connection_data is None:
@@ -105,7 +106,7 @@ def run_headset_orientation_client():
     HOST = server_connection_data["server_ip"]
     PORT = int(server_connection_data["server_port"])
 
-    HOST = '192.168.0.20'
+    HOST = "192.168.0.20"
 
     # Create a socket connection to the server
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -173,7 +174,12 @@ def run_headset_orientation_client():
             timeout_failure = time_lag_ms > failure_threshold
 
             if time_buffer_print_index % 1000 == 0:
-                print("time lag", int(time_lag_ms), "ms failure threshold", failure_threshold)
+                print(
+                    "time lag",
+                    int(time_lag_ms),
+                    "ms failure threshold",
+                    failure_threshold,
+                )
 
             timeout_failure_window[
                 timeout_failure_window_index % len(timeout_failure_window)
@@ -192,27 +198,36 @@ def run_headset_orientation_client():
             print(f"all is well, {pitch} {yaw} {throttle} {steering}")
 
             # If all is well, send the data to the Arduino
-            send_command_to_arduino(-pitch, -yaw, throttle, steering)
+            send_command_to_arduino(sequence_number, -pitch, -yaw, throttle, steering)
+            sequence_number = (sequence_number + 1) % 256
 
         arduino_read_thread.join()
 
 
-def validate_and_send_command_to_arduino(message):
-    try:
-        pitch, yaw = message.strip().split(" ")
-        pitch = int(pitch)
-        yaw = int(yaw)
-    except:
-        print("wrong format")
-        return
-    send_command_to_arduino(pitch, yaw, 0, 0)
-
-
-def send_command_to_arduino(pitch, yaw, throttle, steering):
+def send_command_to_arduino(sequence_number, pitch, yaw, throttle, steering):
+    # Packet is structured as follows:
     # 0xDEADBEEF as a header
+    # 1 byte sequence number
+    # 4 bytes for pitch
+    # 4 bytes for yaw
+    # 4 bytes for throttle
+    # 4 bytes for steering
+    # 1 byte checksum
     ready_to_send_bytes = struct.pack(
-        "<Iffff", 0xDEADBEEF, pitch, yaw, throttle, steering
+        "<IBffff",
+        0xDEADBEEF,
+        sequence_number,
+        pitch,
+        yaw,
+        throttle,
+        steering,
     )
+
+    checksum = 0
+    for byte in ready_to_send_bytes:
+        checksum ^= byte
+
+    ready_to_send_bytes += struct.pack("<B", checksum)
 
     # Send the packet
     ser.write(ready_to_send_bytes)

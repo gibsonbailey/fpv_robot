@@ -187,8 +187,7 @@ def run_headset_orientation_client():
             if timeout_failure:
                 continue
 
-            if random.random() < 0.05:
-                print(f"all is well, {pitch} {yaw} {throttle} {steering}")
+            print(f"all is well, {pitch} {yaw} {throttle} {steering}")
 
             # If all is well, send the data to the Arduino
             send_command_to_arduino(-pitch, -yaw, throttle, steering)
@@ -225,12 +224,11 @@ def read_from_arduino(active_socket):
     while READ_FROM_ARDUINO_THREAD_ENABLED:
         data = ser.readline().decode("utf-8").strip()
         if data:
-            print(f"Received: {data}")
+            print(f"Received from Arduino: {data}")
             if data.startswith("tel:"):
                 _, speed_mph, distance_ft = data.split(" ")
                 speed_mph = float(speed_mph)
                 distance_ft = float(distance_ft)
-                print(f"Parsed speed: {speed_mph} mph, distance: {distance_ft} ft")
                 active_socket.sendall(struct.pack("<Qff", 0, speed_mph, distance_ft))
 
 

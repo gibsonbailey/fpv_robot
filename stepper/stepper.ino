@@ -2,7 +2,7 @@
 #include <TMCStepper.h>
 #include "hall_effect_sensor.h"
 
-HallSensor hallSensor(5, 10, 100000); // Pin 2, buffer size 10, valid window 100us
+HallSensor hallSensor(5, 10, 100000); // Pin 5, buffer size 10, valid window 100us
 
 #define dirPin 21
 #define stepPin 19
@@ -41,8 +41,6 @@ int degrees_to_microsteps(float degrees) {
     }
     float microsteps = degrees * 200.0f * microsteps_setting / 360.0f;
     int s = static_cast<int>(microsteps);
-    // Serial.print("Steps: ");
-    // Serial.println(s);
     return s;
 }
 
@@ -205,9 +203,6 @@ void setup() {
   // Enable the timer; prescaler = 64
   TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV64_gc
                     | TCA_SINGLE_ENABLE_bm;
-  // Enable the timer; prescaler = 4
-  // TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV4_gc
-  //                   | TCA_SINGLE_ENABLE_bm;
 
   interrupts();        // Re-enable interrupts
 
@@ -218,33 +213,25 @@ void setup() {
 int counter = 0;
 
 // 4 bytes for header, 
+// 1 byte for sequence number,
 // 4 bytes for pitch,
 // 4 bytes for yaw,
 // 4 bytes for throttle,
 // 4 bytes for steering
-const int buffer_size = 20;
+// 1 byte for checksum
+const int buffer_size = 22;
 const int header_size = 4;
 byte serial_buffer[buffer_size];
 int serial_buffer_index = 0;
 int32_t HEADER = 0xDEADBEEF;
 
-uint16_t test_val = 0;
-int increment = 1;
-
 unsigned long last_control_update = 0;
+uint8_t expected_sequence_number = 0;
 
 void loop() {
     if (counter % 1000 == 0) {
-        // float frequency = hallSensor.getFrequency();
         float distance = hallSensor.getDistance();
         float speed = hallSensor.getSpeed();
-        // Serial.print("Frequency: ");
-        // Serial.print(frequency);
-        // Serial.print(" Hz");
-        // Serial.print(", distance: ");
-        // Serial.print(distance);
-        // Serial.print(" inches");
-        // Serial.print(", speed: ");
         Serial.print("tel: ");
         Serial.print(speed);
         Serial.print(" ");
@@ -280,42 +267,57 @@ void loop() {
         float steering_value = 0;
 
         if (serial_buffer_index == buffer_size) {
-            memcpy(&pitch_angle, serial_buffer + header_size, 4);
-            memcpy(&yaw_angle, serial_buffer + header_size + 4, 4);
-            memcpy(&throttle_value, serial_buffer + header_size + 8, 4);
-            memcpy(&steering_value, serial_buffer + header_size + 12, 4);
-
-            serial_buffer_index = 0;
-
-            // Serial.print("Yaw angle: ");
-            // Serial.println(yaw_angle);
-
-            update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
-
-            Serial.print("Pitch: ");
-            Serial.println(pitch_angle);
-            Serial.print("Yaw: ");
-            Serial.println(yaw_angle);
-            Serial.print("Throttle: ");
-            Serial.println(throttle_value);
-            Serial.print("Steering: ");
-            Serial.println(steering_value);
+            uint8_t receieved_sequence_number = serial_buffer[header_size]; 
+            uint8_t received_checksum = serial_buffer[buffer_size - 1];
             
-            // Adjust steering angle based on speed
-            float speed = hallSensor.getSpeed();
-            if (speed > 5) {
-                steering_value = steering_value * 0.5;
+            uint8_t computed_checksum = 0;
+            for (int i = 0; i < buffer_size - 1; i++) {
+                computed_checksum ^= serial_buffer[i];
             }
+            
+            if (computed_checksum == received_checksum) {
+                if (receieved_sequence_number == expected_sequence_number) {
+                    expected_sequence_number = (expected_sequence_number + 1) % 256;
 
-            const float steering_val = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
-            const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 1.0f);
+                    memcpy(&pitch_angle, serial_buffer + header_size + 1, 4);
+                    memcpy(&yaw_angle, serial_buffer + header_size + 1 + 4, 4);
+                    memcpy(&throttle_value, serial_buffer + header_size + 1 + 8, 4);
+                    memcpy(&steering_value, serial_buffer + header_size + 1 + 12, 4);
 
-            last_control_update = millis();
+                    update_stepper_angles(stepper, pitch_angle, yawStepper, yaw_angle);
 
-            // pin 9 (steering)
-            TCA0.SINGLE.CMP0 = mapSteering(steering_val);
-            // pin 10 (throttle)
-            TCA0.SINGLE.CMP1 = mapThrottle(throttle_val);
+                    Serial.print("Pitch: ");
+                    Serial.println(pitch_angle);
+                    Serial.print("Yaw: ");
+                    Serial.println(yaw_angle);
+                    Serial.print("Throttle: ");
+                    Serial.println(throttle_value);
+                    Serial.print("Steering: ");
+                    Serial.println(steering_value);
+                    
+                    // Adjust steering angle based on speed
+                    float speed = hallSensor.getSpeed();
+                    if (speed > 5) {
+                        steering_value = steering_value * 0.5;
+                    }
+
+                    const float steering_val = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);
+                    const float throttle_val = remap(throttle_value, 0.0f, 1.0f, 0.5f, 1.0f);
+
+                    last_control_update = millis();
+
+                    // pin 9 (steering)
+                    TCA0.SINGLE.CMP0 = mapSteering(steering_val);
+                    // pin 10 (throttle)
+                    TCA0.SINGLE.CMP1 = mapThrottle(throttle_val);
+                } else {
+                    Serial.println("Sequence number mismatch");
+                    expected_sequence_number = (receieved_sequence_number + 1) % 256;
+                }
+            } else {
+                Serial.println("Checksum mismatch");
+            }
+            serial_buffer_index = 0;
         }
     }
 

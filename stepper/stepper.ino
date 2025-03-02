@@ -54,6 +54,26 @@ void prepare_driver(TMC2209Stepper& driver) {
   driver.microsteps(MICROSTEPS);
 }
 
+// Define steering angle constants
+const float L = 0.3;          // Wheelbase in meters
+const float a_c_max = 9.8;    // Maximum centripetal acceleration in m/s²
+const float delta_max = 0.5236; // Maximum steering angle in radians (approximately 30 degrees)
+
+float get_speed_limited_steering_angle(float steering_input, float speed_mph) {
+  // Convert speed to m/s
+  float speed_ms = speed_mph * 0.44704;
+
+  float r_min = speed_ms * speed_ms / a_c_max;
+
+  // Calculate maximum steering angle based on speed
+  float delta = atan(L / r_min);
+
+  float k = min(delta / delta_max, 1.0f);
+
+  // Limit steering angle based on speed
+  return steering_input * k;
+}
+
 // Optional argument for slow acceleration
 void prepare_stepper(AccelStepper& stepper, bool slow = false) {
   if (slow) {
@@ -296,9 +316,17 @@ void loop() {
                     Serial.println(steering_value);
                     
                     // Adjust steering angle based on speed
-                    float speed = hallSensor.getSpeed();
-                    if (speed > 5) {
-                        steering_value = steering_value * 0.5;
+                    steering_value = get_speed_limited_steering_angle(steering_value, hallSensor.getSpeed());
+
+                    // There is a dead zone in the middle of the throttle signal from -0.1 to 0.1 in the ESC
+                    // Compress that dead zone to -0.02 to 0.02, so the throttle is more responsive
+                    if (throttle_value > 0.02) {
+                        throttle_value = remap(throttle_value, 0.0, 1.0, 0.1, 1.0);
+                    } else if (throttle_value < -0.02) {
+                        // Make reverse half as fast
+                        throttle_value = remap(throttle_value, -1.0, 0.0, -0.5, -0.1);
+                    } else {
+                        throttle_value = 0.0;
                     }
 
                     const float steering_val = remap(-steering_value, -1.0f, 1.0f, 0.0f, 1.0f);

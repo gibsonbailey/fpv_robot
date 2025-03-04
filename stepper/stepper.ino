@@ -224,13 +224,46 @@ void setup() {
   TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV64_gc
                     | TCA_SINGLE_ENABLE_bm;
 
+  // Use this to set the analog reference voltage
+  // for the ADC
+  analogReference(INTERNAL4V3);
+  
   interrupts();        // Re-enable interrupts
 
   // Set up hall effect sensor
   hallSensor.begin();
 }
 
-int counter = 0;
+// Use 8.4 V as 100%
+// This voltage is cut in half by the voltage divider
+// before being read by the analog pin
+const float MAX_NIMH_BATTERY_VOLTAGE = 8.4;
+const float MIN_NIMH_BATTERY_VOLTAGE = 7.0;
+const float MAX_LIPO_BATTERY_VOLTAGE = 8.4;
+const float MIN_LIPO_BATTERY_VOLTAGE = 6.4;
+const float BATTERY_VOLTAGE_DIVIDER = 2.0;
+
+int get_lipo_battery_percentage() {
+  int battery_voltage = analogRead(A2);
+  float voltage = battery_voltage * 4.3f / 1023.0f * BATTERY_VOLTAGE_DIVIDER;
+  int percentage = remap(voltage, MIN_LIPO_BATTERY_VOLTAGE, MAX_LIPO_BATTERY_VOLTAGE, 0, 100);
+  if (percentage < 0) {
+    percentage = 0;
+  }
+  return percentage;
+}
+
+int get_nimh_battery_percentage() {
+  int battery_voltage = analogRead(A3);
+  float voltage = battery_voltage * 4.3f / 1023.0f * BATTERY_VOLTAGE_DIVIDER;
+  int percentage = remap(voltage, MIN_NIMH_BATTERY_VOLTAGE, MAX_NIMH_BATTERY_VOLTAGE, 0, 100);
+  if (percentage < 0) {
+    percentage = 0;
+  }
+  return percentage;
+}
+
+int loop_counter = 0;
 
 // 4 bytes for header, 
 // 1 byte for sequence number,
@@ -249,17 +282,24 @@ unsigned long last_control_update = 0;
 uint8_t expected_sequence_number = 0;
 
 void loop() {
-    if (counter % 1000 == 0) {
+    if (loop_counter % 10000 == 0) {
         float distance = hallSensor.getDistance();
         float speed = hallSensor.getSpeed();
+        int lipo_percentage = get_lipo_battery_percentage();
+        int nimh_percentage = get_nimh_battery_percentage();
+
         Serial.print("tel: ");
         Serial.print(speed);
         Serial.print(" ");
-        Serial.print(distance / 12); // inches to feet
+        Serial.print(distance / 12.0f); // inches to feet
+        Serial.print(" ");
+        Serial.print(lipo_percentage);
+        Serial.print(" ");
+        Serial.print(nimh_percentage);
         Serial.println();
     }
 
-    counter++;
+    loop_counter++;
 
     if (Serial.available()) {
         byte b = Serial.read();

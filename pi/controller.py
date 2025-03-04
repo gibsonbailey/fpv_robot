@@ -243,10 +243,26 @@ def read_from_arduino(active_socket):
         if data:
             print(f"Received from Arduino: {data}")
             if data.startswith("tel:"):
-                _, speed_mph, distance_ft = data.split(" ")
+                (
+                    _,
+                    speed_mph,
+                    distance_ft,
+                    control_battery_percentage,
+                    drive_battery_percentage,
+                ) = data.split(" ")
                 speed_mph = float(speed_mph)
                 distance_ft = float(distance_ft)
-                active_socket.sendall(struct.pack("<Qff", 0, speed_mph, distance_ft))
+                active_socket.sendall(
+                    struct.pack(
+                        # "<Qffii" means little-endian unsigned long long (8 bytes), float (4 bytes), float (4 bytes), int (4 bytes), int (4 bytes)
+                        "<Qffii",
+                        0,
+                        speed_mph,
+                        distance_ft,
+                        control_battery_percentage,
+                        drive_battery_percentage,
+                    )
+                )
 
 
 try:

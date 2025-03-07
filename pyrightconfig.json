@@ -1,0 +1,10 @@
+{
+  "reportMissingParameterType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownLambdaType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "venvPath": "./pi",
+  "venv": "venv"
+}

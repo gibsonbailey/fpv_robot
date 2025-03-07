@@ -161,6 +161,45 @@ uint16_t mapThrottle(float fraction) {
   return (uint16_t)mapped;
 }
 
+
+int lipo_average_percentage = 0;
+int nimh_average_percentage = 0;
+
+uint8_t lipo_percentage_buffer[10];
+uint8_t nimh_percentage_buffer[10];
+
+uint8_t lipo_percentage_index = 0;
+uint8_t nimh_percentage_index = 0;
+
+// Use 8.4 V as 100%
+// This voltage is cut in half by the voltage divider
+// before being read by the analog pin
+const float MAX_NIMH_BATTERY_VOLTAGE = 8.4;
+const float MIN_NIMH_BATTERY_VOLTAGE = 7.0;
+const float MAX_LIPO_BATTERY_VOLTAGE = 8.4;
+const float MIN_LIPO_BATTERY_VOLTAGE = 6.4;
+const float BATTERY_VOLTAGE_DIVIDER = 2.0;
+
+int get_lipo_battery_percentage() {
+  int battery_voltage = analogRead(A2);
+  float voltage = battery_voltage * 4.3f / 1023.0f * BATTERY_VOLTAGE_DIVIDER;
+  int percentage = remap(voltage, MIN_LIPO_BATTERY_VOLTAGE, MAX_LIPO_BATTERY_VOLTAGE, 0, 100);
+  if (percentage < 0) {
+    percentage = 0;
+  }
+  return percentage;
+}
+
+int get_nimh_battery_percentage() {
+  int battery_voltage = analogRead(A3);
+  float voltage = battery_voltage * 4.3f / 1023.0f * BATTERY_VOLTAGE_DIVIDER;
+  int percentage = remap(voltage, MIN_NIMH_BATTERY_VOLTAGE, MAX_NIMH_BATTERY_VOLTAGE, 0, 100);
+  if (percentage < 0) {
+    percentage = 0;
+  }
+  return percentage;
+}
+
 void setup() {
   // Initialize Serial1 and set up drivers immediately, otherwise
   // the current will not be limited on start up and the motors may get hot.
@@ -232,36 +271,16 @@ void setup() {
 
   // Set up hall effect sensor
   hallSensor.begin();
-}
 
-// Use 8.4 V as 100%
-// This voltage is cut in half by the voltage divider
-// before being read by the analog pin
-const float MAX_NIMH_BATTERY_VOLTAGE = 8.4;
-const float MIN_NIMH_BATTERY_VOLTAGE = 7.0;
-const float MAX_LIPO_BATTERY_VOLTAGE = 8.4;
-const float MIN_LIPO_BATTERY_VOLTAGE = 6.4;
-const float BATTERY_VOLTAGE_DIVIDER = 2.0;
-
-int get_lipo_battery_percentage() {
-  int battery_voltage = analogRead(A2);
-  float voltage = battery_voltage * 4.3f / 1023.0f * BATTERY_VOLTAGE_DIVIDER;
-  int percentage = remap(voltage, MIN_LIPO_BATTERY_VOLTAGE, MAX_LIPO_BATTERY_VOLTAGE, 0, 100);
-  if (percentage < 0) {
-    percentage = 0;
+  // initialize battery percentages
+  int initial_lipo_percentage = get_lipo_battery_percentage();
+  int initial_nimh_percentage = get_nimh_battery_percentage();
+  for (int i = 0; i < 10; i++) {
+    lipo_percentage_buffer[i] = initial_lipo_percentage;
+    nimh_percentage_buffer[i] = initial_nimh_percentage;
   }
-  return percentage;
 }
 
-int get_nimh_battery_percentage() {
-  int battery_voltage = analogRead(A3);
-  float voltage = battery_voltage * 4.3f / 1023.0f * BATTERY_VOLTAGE_DIVIDER;
-  int percentage = remap(voltage, MIN_NIMH_BATTERY_VOLTAGE, MAX_NIMH_BATTERY_VOLTAGE, 0, 100);
-  if (percentage < 0) {
-    percentage = 0;
-  }
-  return percentage;
-}
 
 int loop_counter = 0;
 
@@ -282,20 +301,37 @@ unsigned long last_control_update = 0;
 uint8_t expected_sequence_number = 0;
 
 void loop() {
-    if (loop_counter % 10000 == 0) {
+    if (loop_counter % 100000 == 0) {
+        lipo_percentage_buffer[lipo_percentage_index] = get_lipo_battery_percentage();
+        nimh_percentage_buffer[nimh_percentage_index] = get_nimh_battery_percentage();
+        lipo_percentage_index = (lipo_percentage_index + 1) % 10;
+        nimh_percentage_index = (nimh_percentage_index + 1) % 10;
+
+        int sum = 0;
+        for (int i = 0; i < 10; i++) {
+            sum += lipo_percentage_buffer[i];
+        }
+        lipo_average_percentage = sum / 10;
+        
+        sum = 0;
+        for (int i = 0; i < 10; i++) {
+            sum += nimh_percentage_buffer[i];
+        }
+        nimh_average_percentage = sum / 10;
+    }
+
+    if (loop_counter % 1000 == 0) {
         float distance = hallSensor.getDistance();
         float speed = hallSensor.getSpeed();
-        int lipo_percentage = get_lipo_battery_percentage();
-        int nimh_percentage = get_nimh_battery_percentage();
 
         Serial.print("tel: ");
         Serial.print(speed);
         Serial.print(" ");
         Serial.print(distance / 12.0f); // inches to feet
         Serial.print(" ");
-        Serial.print(lipo_percentage);
+        Serial.print(lipo_average_percentage);
         Serial.print(" ");
-        Serial.print(nimh_percentage);
+        Serial.print(nimh_average_percentage);
         Serial.println();
     }
 

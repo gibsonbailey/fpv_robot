@@ -3,6 +3,8 @@ import socket
 import struct
 import time
 
+from manager.constants import CONTROL_STREAM_PORT
+
 from .arduino_communication import (get_arduino_serial_interface,
                                     send_command_to_arduino)
 from .headset_location import get_headset_location
@@ -47,7 +49,7 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
         return
 
     REMOTE_IP = headset_location["server_ip"]
-    REMOTE_PORT = 6779  # Port for receiving keepalive packets on the headset
+    REMOTE_PORT = CONTROL_STREAM_PORT
 
     if not mac_test_environment:
         arduino_serial_interface = get_arduino_serial_interface()

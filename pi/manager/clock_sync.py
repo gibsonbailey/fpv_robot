@@ -2,6 +2,8 @@ import socket
 import struct
 import time
 
+from manager.constants import CLOCK_SYNC_PORT
+
 from .utils import recv_all
 from .exceptions import ControllerServerConnectionRefusedError
 from .headset_location import get_headset_location
@@ -21,7 +23,7 @@ def start_clock_sync_client():
     )
 
     HOST = headset_location["server_ip"]
-    PORT = int(headset_location["server_port"])
+    PORT = CLOCK_SYNC_PORT
 
     # Create a socket connection to the server
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

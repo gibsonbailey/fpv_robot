@@ -51,7 +51,7 @@ def set_headset_location() -> bool:
         json={
             "server_public_ip": public_ip,
             "server_local_ip": socket.gethostbyname(socket.gethostname()),
-            "server_port": 6778,
+            "server_port": 0,
         },
     )
     if response.status_code == 200:

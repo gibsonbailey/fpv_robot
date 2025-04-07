@@ -16,6 +16,7 @@ import socket
 import struct
 import time
 
+from manager.constants import CLOCK_SYNC_PORT, CONTROL_STREAM_PORT
 from manager.headset_location import set_headset_location
 from manager.utils import recv_all
 
@@ -28,10 +29,10 @@ if not success:
 print("Starting mock headset server...")
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind(("0.0.0.0", 6778))
+sock.bind(("0.0.0.0", CLOCK_SYNC_PORT))
 sock.listen(1)
 
-print("Listening for incoming TCP connections on port 6778...")
+print(f"Listening for incoming TCP connections on port {CLOCK_SYNC_PORT}...")
 
 conn, addr = sock.accept()
 print(f"Accepted connection from {addr}")
@@ -84,7 +85,7 @@ print("Opening UDP socket for control messages...")
 # Create a UDP socket for control messages
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-udp_sock.bind(("0.0.0.0", 6779))
+udp_sock.bind(("0.0.0.0", CONTROL_STREAM_PORT))
 
 # Wait for the first packet from the receiver to get its address
 data, target_addr = udp_sock.recvfrom(1024)

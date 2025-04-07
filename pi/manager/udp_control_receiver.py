@@ -141,7 +141,7 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
                 #         f"processing - Seq: {int(latest_seq / 1000):05d}, Data: {latest_packet.hex()}"
                 #     )
 
-                pitch, yaw, throttle, steering = struct.unpack("<ffff", latest_packet)
+                pitch, yaw, throttle, steering = struct.unpack(">ffff", latest_packet)
 
                 if not mac_test_environment:
                     # Send the command to the Arduino

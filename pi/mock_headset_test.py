@@ -15,11 +15,13 @@
 import socket
 import struct
 import time
+from typing import Literal
+
+from pynput import keyboard
 
 from manager.constants import CLOCK_SYNC_PORT, CONTROL_STREAM_PORT
 from manager.headset_location import set_headset_location
 from manager.utils import recv_all
-
 
 print("Setting headset location...")
 success = set_headset_location()
@@ -124,13 +126,53 @@ def send_packet(
     #     print(f"sent - Seq: {int(seq / 1000):05d}, Payload: {payload.hex()}")
 
 
+# Function to handle key press events
+
+throttle = 0.0
+steering = 0.0
+
+def on_press(key):
+    global throttle
+    global steering
+    try:
+        if key == keyboard.Key.up:
+            throttle = 0.1
+        elif key == keyboard.Key.down:
+            throttle = -0.1
+        elif key == keyboard.Key.right:
+            steering = 0.5
+        elif key == keyboard.Key.left:
+            steering = -0.5
+        else:
+            throttle = 0.0
+            steering = 0.0
+    except AttributeError:
+        return
+
+
+def on_release(key):
+    global throttle
+    global steering
+    if key == keyboard.Key.up or key == keyboard.Key.down:
+        throttle = 0.0
+    elif key == keyboard.Key.right or key == keyboard.Key.left:
+        steering = 0.0
+    elif key == keyboard.Key.esc:
+        # Stop listener
+        return
+
+listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+listener.start()  # Start the listener
+
 seq = 0  # Initialize sequence number
 counter = 0  # Initialize payload counter for simulation
 
 # Send data packets continuously
 while True:
+    # Is up arrow key pressed?
+
     # Simulate a control signal with a payload of 4 floats
-    payload = struct.pack(">ffff", counter / 10, 2, 3, 4)
+    payload = struct.pack(">ffff", float(counter / 10), 0.0, float(throttle), float(steering))
     send_packet(udp_sock, target_addr, seq, payload)
 
     # Increment sequence number

@@ -2,6 +2,8 @@ import socket
 
 import requests
 
+from manager.constants import CLOCK_SYNC_PORT
+
 from .utils import cache_if_not_none
 
 CONNECTION_SERVICE_IP = "3.215.138.208"
@@ -51,7 +53,7 @@ def set_headset_location() -> bool:
         json={
             "server_public_ip": public_ip,
             "server_local_ip": socket.gethostbyname(socket.gethostname()),
-            "server_port": 0,
+            "server_port": CLOCK_SYNC_PORT,
         },
     )
     if response.status_code == 200:

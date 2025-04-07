@@ -60,6 +60,10 @@ def send_command_to_arduino(
         steering,
     )
 
+    print(
+        f"processing - Seq: {int(sequence_number):03d}, Data: {throttle}, {steering}"
+    )
+
     checksum = 0
     for byte in ready_to_send_bytes:
         checksum ^= byte

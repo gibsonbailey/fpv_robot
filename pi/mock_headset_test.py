@@ -103,7 +103,12 @@ def calculate_checksum(data: bytes) -> int:
 
 
 def send_packet(
-    sock: socket.socket, target_addr: tuple[str, int], seq: int, payload: bytes
+    sock: socket.socket,
+    target_addr: tuple[str, int],
+    seq: int,
+    payload: bytes,
+    steering_value: float,
+    throttle_value: float,
 ):
     """
     Send a UDP packet with sequence number, checksum, and payload.
@@ -120,7 +125,7 @@ def send_packet(
     header = struct.pack(">IHQ", seq, checksum, avg_offset + int(time.time() * 1000))
     packet = header + payload
     _ = sock.sendto(packet, target_addr)
-    print(f"sent - Seq: {int(seq):05d}, Payload: {payload.hex()}")
+    print(f"sent - Seq: {int(seq):05d}, Payload: {steering_value}, {throttle_value}")
     # if seq % 1000 == 0:
     #     # Print the packet details every 1k packets
     #     print(f"sent - Seq: {int(seq / 1000):05d}, Payload: {payload.hex()}")
@@ -131,18 +136,19 @@ def send_packet(
 throttle = 0.0
 steering = 0.0
 
+
 def on_press(key):
     global throttle
     global steering
     try:
         if key == keyboard.Key.up:
-            throttle = 0.1
+            throttle = 0.025
         elif key == keyboard.Key.down:
-            throttle = -0.1
+            throttle = -0.025
         elif key == keyboard.Key.right:
-            steering = 0.5
+            steering = 1.0
         elif key == keyboard.Key.left:
-            steering = -0.5
+            steering = -1.0
         else:
             throttle = 0.0
             steering = 0.0
@@ -161,6 +167,7 @@ def on_release(key):
         # Stop listener
         return
 
+
 listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 listener.start()  # Start the listener
 
@@ -172,8 +179,10 @@ while True:
     # Is up arrow key pressed?
 
     # Simulate a control signal with a payload of 4 floats
-    payload = struct.pack(">ffff", float(counter / 10), 0.0, float(throttle), float(steering))
-    send_packet(udp_sock, target_addr, seq, payload)
+    payload = struct.pack(
+        ">ffff", float(counter / 10), 0.0, float(throttle), float(steering)
+    )
+    send_packet(udp_sock, target_addr, seq, payload, steering, throttle)
 
     # Increment sequence number
     seq = seq + 1

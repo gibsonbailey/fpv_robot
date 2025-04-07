@@ -133,9 +133,9 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
 
             # Process the latest packet if one was found
             if latest_packet:
-                print(
-                    f"processing - Seq: {int(latest_seq):05d}, Data: {latest_packet.hex()}"
-                )
+                # print(
+                #     f"processing - Seq: {int(latest_seq):05d}, Data: {latest_packet.hex()}"
+                # )
                 # if latest_seq % 1000 == 0:
                 #     print(
                 #         f"processing - Seq: {int(latest_seq / 1000):05d}, Data: {latest_packet.hex()}"

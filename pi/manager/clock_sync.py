@@ -1,20 +1,10 @@
-import collections
 import socket
 import struct
 import time
 
-from manager.headset_location import get_headset_location
-from manager.exceptions import ControllerServerConnectionRefusedError
-
-
-def recv_all(sock, length):
-    data = b""
-    while len(data) < length:
-        more = sock.recv(length - len(data))
-        if not more:
-            raise ConnectionError("Socket connection closed")
-        data += more
-    return data
+from .utils import recv_all
+from .exceptions import ControllerServerConnectionRefusedError
+from .headset_location import get_headset_location
 
 
 def start_clock_sync_client():
@@ -33,7 +23,9 @@ def start_clock_sync_client():
     HOST = headset_location["server_ip"]
     PORT = int(headset_location["server_port"])
 
-    # HOST = "192.168.0.20"
+    HOST = "127.0.0.1"
+    PORT = 6778
+    print(f"Overriding to localhost for testing: {HOST}:{PORT}")
 
     # Create a socket connection to the server
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -51,16 +43,15 @@ def start_clock_sync_client():
             print(f"connected to headset at {HOST}:{PORT}")
 
             while True:
-                data = recv_all(s, 24)
+                data = recv_all(s, 1)
                 if not data:
                     break
 
-                if all(x == 0 for x in [timestamp_ms, pitch, yaw, throttle, steering]):
-                    # this is a time offset measurement
-                    s.sendall(struct.pack("<Qff", int(time.time() * 1000), 0, 0))
-                    print("sent time offset measurement")
-                    clock_sync_packet_count += 1
-                    continue
+                # this is a time offset measurement
+                s.sendall(struct.pack("<Q", int(time.time() * 1000)))
+                print("sent time offset measurement")
+                clock_sync_packet_count += 1
+                continue
     except ConnectionError:
         print("Connection closed by server")
         return clock_sync_packet_count

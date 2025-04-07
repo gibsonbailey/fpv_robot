@@ -1,4 +1,5 @@
 from functools import wraps
+import socket
 
 
 def cache_if_not_none(func):
@@ -14,3 +15,14 @@ def cache_if_not_none(func):
         return result
 
     return wrapper
+
+
+def recv_all(sock: socket.socket, length: int) -> bytes:
+    data = b""
+    while len(data) < length:
+        more = sock.recv(length - len(data))
+        if not more:
+            raise ConnectionError("Socket connection closed")
+        data += more
+    return data
+

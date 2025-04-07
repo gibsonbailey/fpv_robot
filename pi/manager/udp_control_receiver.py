@@ -3,9 +3,9 @@ import socket
 import struct
 import time
 
-from manager.arduino_communication import (get_arduino_serial_interface,
-                                           send_command_to_arduino)
-from manager.headset_location import get_headset_location
+from .arduino_communication import (get_arduino_serial_interface,
+                                    send_command_to_arduino)
+from .headset_location import get_headset_location
 
 # UDP settings
 LOCAL_IP = "0.0.0.0"  # Bind to all interfaces

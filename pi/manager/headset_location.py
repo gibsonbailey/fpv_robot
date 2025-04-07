@@ -1,7 +1,8 @@
 import socket
+
 import requests
 
-from manager.utils import cache_if_not_none
+from .utils import cache_if_not_none
 
 
 @cache_if_not_none

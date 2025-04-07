@@ -4,7 +4,7 @@ import time
 
 import serial
 
-from manager.utils import cache_if_not_none
+from .utils import cache_if_not_none
 
 ARDUINO_BAUD_RATE = 115200
 

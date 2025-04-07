@@ -23,13 +23,9 @@ def start_clock_sync_client():
     HOST = headset_location["server_ip"]
     PORT = int(headset_location["server_port"])
 
-    HOST = "127.0.0.1"
-    PORT = 6778
-    print(f"Overriding to localhost for testing: {HOST}:{PORT}")
-
     # Create a socket connection to the server
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(3)  # Set a timeout for the connection attempt
+    sock.settimeout(0.3)  # Set a timeout for the connection attempt
 
     try:
         with sock as s:
@@ -52,8 +48,8 @@ def start_clock_sync_client():
                 print("sent time offset measurement")
                 clock_sync_packet_count += 1
                 continue
-    except ConnectionError:
-        print("Connection closed by server")
+    except (TimeoutError, ConnectionError):
+        print("Socket timed out")
         return clock_sync_packet_count
     except Exception as e:
         raise e

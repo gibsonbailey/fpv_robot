@@ -40,16 +40,20 @@ def send_keepalive(sock: socket.socket, addr: tuple[str, int]):
     print(f"Sent keepalive to {addr[0]}:{addr[1]}")
 
 
-def start_udp_control_receiver():
+def start_udp_control_receiver(mac_test_environment: bool = False):
     headset_location = get_headset_location()
     if headset_location is None:
         print("Failed to get headset server info in udp_control_receiver.py")
         return
 
     REMOTE_IP = headset_location["server_ip"]
-    REMOTE_PORT = 5000  # Port for receiving keepalive packets on the headset
+    REMOTE_PORT = 6779  # Port for receiving keepalive packets on the headset
 
-    arduino_serial_interface = get_arduino_serial_interface()
+    if not mac_test_environment:
+        arduino_serial_interface = get_arduino_serial_interface()
+    else:
+        pass
+        # REMOTE_IP = "127.0.0.1"
     arduino_sequence_number = 0
 
     # Create and configure the UDP socket
@@ -128,19 +132,25 @@ def start_udp_control_receiver():
             # Process the latest packet if one was found
             if latest_packet:
                 print(
-                    f"Processing latest packet - Seq: {latest_seq}, Data: {latest_packet.hex()}"
+                    f"processing - Seq: {int(latest_seq):05d}, Data: {latest_packet.hex()}"
                 )
+                # if latest_seq % 1000 == 0:
+                #     print(
+                #         f"processing - Seq: {int(latest_seq / 1000):05d}, Data: {latest_packet.hex()}"
+                #     )
 
                 pitch, yaw, throttle, steering = struct.unpack("<ffff", latest_packet)
 
-                send_command_to_arduino(
-                    arduino_serial_interface,
-                    arduino_sequence_number,
-                    pitch,
-                    yaw,
-                    throttle,
-                    steering,
-                )
+                if not mac_test_environment:
+                    # Send the command to the Arduino
+                    send_command_to_arduino(
+                        arduino_serial_interface,
+                        arduino_sequence_number,
+                        pitch,
+                        yaw,
+                        throttle,
+                        steering,
+                    )
                 arduino_sequence_number = (arduino_sequence_number + 1) % 256
 
                 latest_packet = None  # Reset for the next cycle

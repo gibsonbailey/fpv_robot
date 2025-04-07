@@ -4,12 +4,12 @@ import requests
 
 from .utils import cache_if_not_none
 
+CONNECTION_SERVICE_IP = "3.215.138.208"
+CONNECTION_SERVICE_PORT = 4337
+
 
 @cache_if_not_none
 def get_headset_location() -> dict[str, str] | None:
-    CONNECTION_SERVICE_IP = "3.215.138.208"
-    CONNECTION_SERVICE_PORT = 4337
-
     client_local_ip = socket.gethostbyname(socket.gethostname())
     client_public_ip = requests.get("https://api.ipify.org").text
 
@@ -40,3 +40,23 @@ def get_headset_location() -> dict[str, str] | None:
     else:
         print("Failed to get controller server info")
         return None
+
+
+def set_headset_location() -> bool:
+    """Set the headset location in the connection service."""
+    public_ip = requests.get("https://api.ipify.org").text
+
+    response = requests.post(
+        f"http://{CONNECTION_SERVICE_IP}:{CONNECTION_SERVICE_PORT}/server",
+        json={
+            "server_public_ip": public_ip,
+            "server_local_ip": socket.gethostbyname(socket.gethostname()),
+            "server_port": 6778,
+        },
+    )
+    if response.status_code == 200:
+        print("Successfully set headset location")
+        return True
+    else:
+        print("Failed to set headset location")
+        return False

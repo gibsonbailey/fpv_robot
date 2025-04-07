@@ -12,7 +12,7 @@
 # The UDP socket is also used to stream telemetry data to the headset
 
 from manager.clock_sync import start_clock_sync_client
-# from manager.udp_control_receiver import start_udp_control_receiver
+from manager.udp_control_receiver import start_udp_control_receiver
 
 clock_sync_cycles = start_clock_sync_client()
 print(f"Clock sync cycles: {clock_sync_cycles}")
@@ -23,7 +23,5 @@ if clock_sync_cycles == 0:
 
 print("Clock sync finished")
 
-exit(0)
-
 # Now we can start the UDP socket to send and receive real-time data
-# start_udp_control_receiver()
+start_udp_control_receiver(mac_test_environment=True)

@@ -60,9 +60,7 @@ def send_command_to_arduino(
         steering,
     )
 
-    print(
-        f"processing - Seq: {int(sequence_number):03d}, Data: {throttle}, {steering}"
-    )
+    print(f"processing - Seq: {int(sequence_number):03d}, Data: {throttle}, {steering}")
 
     checksum = 0
     for byte in ready_to_send_bytes:
@@ -75,8 +73,8 @@ def send_command_to_arduino(
 
 
 # Create a thread that listens for data from the Arduino
-def read_from_arduino(active_socket, serial_port):
-    while READ_FROM_ARDUINO_THREAD_ENABLED:
+def read_from_arduino(flags, active_socket, serial_port, addr):
+    while flags['thread_enabled']:
         data = serial_port.readline().decode("utf-8").strip()
         if data:
             print(f"Received from Arduino: {data}")
@@ -90,14 +88,15 @@ def read_from_arduino(active_socket, serial_port):
                 ) = data.split(" ")
                 speed_mph = float(speed_mph)
                 distance_ft = float(distance_ft)
-                active_socket.sendall(
+
+                _ = active_socket.sendto(
                     struct.pack(
-                        # "<Qffii" means little-endian unsigned long long (8 bytes), float (4 bytes), float (4 bytes), int (4 bytes), int (4 bytes)
-                        "<Qffii",
-                        0,
+                        # "<ffii" means little-endian 2 floats (4 bytes each), 2 ints (4 bytes each)
+                        "<ffii",
                         speed_mph,
                         distance_ft,
                         control_battery_percentage,
                         drive_battery_percentage,
-                    )
+                    ),
+                    addr,
                 )

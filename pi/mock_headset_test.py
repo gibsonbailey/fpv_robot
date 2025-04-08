@@ -12,16 +12,18 @@
 # The headset can now stream control messages to the pi
 
 # Create a TCP socket for the clock sync
+import select
 import socket
 import struct
 import time
-from typing import Literal
 
 from pynput import keyboard
 
 from manager.constants import CLOCK_SYNC_PORT, CONTROL_STREAM_PORT
 from manager.headset_location import set_headset_location
 from manager.utils import recv_all
+
+TELEMETRY_PACKET_SIZE = 16
 
 print("Setting headset location...")
 success = set_headset_location()
@@ -88,6 +90,7 @@ print("Opening UDP socket for control messages...")
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 udp_sock.bind(("0.0.0.0", CONTROL_STREAM_PORT))
+udp_sock.setblocking(False)
 
 # Wait for the first packet from the receiver to get its address
 data, target_addr = udp_sock.recvfrom(1024)
@@ -116,7 +119,7 @@ def send_packet(
     Args:
         sock: UDP socket object
         target_addr: Tuple of (target_ip, target_port)
-        seq: Sequence number (0-255)
+        seq: Sequence number
         payload: Byte string of the payload data
     """
     checksum = calculate_checksum(payload)
@@ -142,13 +145,13 @@ def on_press(key):
     global steering
     try:
         if key == keyboard.Key.up:
-            throttle = 0.025
+            throttle = 0.25
         elif key == keyboard.Key.down:
-            throttle = -0.025
+            throttle = -0.45
         elif key == keyboard.Key.right:
-            steering = 1.0
+            steering = 0.5
         elif key == keyboard.Key.left:
-            steering = -1.0
+            steering = -0.5
         else:
             throttle = 0.0
             steering = 0.0
@@ -176,7 +179,41 @@ counter = 0  # Initialize payload counter for simulation
 
 # Send data packets continuously
 while True:
-    # Is up arrow key pressed?
+    # Check if there is data to read from the socket
+    readable, _, _ = select.select([sock], [], [], 0.01)  # 10ms timeout
+    if readable:
+        latest_packet = None
+
+        # Drain the socket buffer to find the latest packet
+        while True:
+            try:
+                data, _ = sock.recvfrom(1024)  # Buffer size of 1024 bytes
+
+                # Check if packet is
+                if len(data) != TELEMETRY_PACKET_SIZE:
+                    print("Received packet not the right size, skipping")
+                    continue
+
+                try:
+                     latest_packet = struct.unpack(
+                        "<ffii",
+                        # speed_mph,
+                        # distance_ft,
+                        # control_battery_percentage,
+                        # drive_battery_percentage,
+                        data
+                    )
+                except struct.error:
+                    print("Failed to unpack telemetry data")
+                    continue
+            except BlockingIOError:
+                # No more packets to read, exit the inner loop
+                break
+        if latest_packet:
+            # Process the latest packet if one was found
+            print(
+                f"received - speed_mph: {latest_packet[0]}, distance_ft: {latest_packet[1]}, control_battery_percentage: {latest_packet[2]}, drive_battery_percentage: {latest_packet[3]}"
+            )
 
     # Simulate a control signal with a payload of 4 floats
     payload = struct.pack(

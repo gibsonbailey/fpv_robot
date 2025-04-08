@@ -1,11 +1,12 @@
 import select
 import socket
 import struct
+import threading
 import time
 
 from manager.constants import CONTROL_STREAM_PORT
 
-from .arduino_communication import (get_arduino_serial_interface,
+from .arduino_communication import (get_arduino_serial_interface, read_from_arduino,
                                     send_command_to_arduino)
 from .headset_location import get_headset_location
 
@@ -15,7 +16,7 @@ LOCAL_PORT = 12345  # Local port for receiving
 
 
 # Keepalive settings
-KEEPALIVE_INTERVAL = 15  # Seconds between keepalive packets
+KEEPALIVE_INTERVAL = 10  # Seconds between keepalive packets
 KEEPALIVE_MESSAGE = b"PING"  # Simple keepalive message
 
 # Packet structure settings
@@ -54,8 +55,10 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
     if not mac_test_environment:
         arduino_serial_interface = get_arduino_serial_interface()
     else:
-        pass
-        # REMOTE_IP = "127.0.0.1"
+        REMOTE_IP = '127.0.0.1'
+        REMOTE_IP = '172.16.226.154'
+        HOST = '172.16.226.154'
+
     arduino_sequence_number = 0
 
     # Create and configure the UDP socket
@@ -66,6 +69,17 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
     # Send an initial keepalive to establish the NAT mapping
     send_keepalive(sock, (REMOTE_IP, REMOTE_PORT))
     last_keepalive_time = time.time()
+
+    arduino_thread_flags = {
+        "thread_enabled": True,
+    }
+
+    if not mac_test_environment:
+        arduino_read_thread = threading.Thread(
+            target=read_from_arduino,
+            args=(arduino_thread_flags, sock, arduino_serial_interface, (REMOTE_IP, REMOTE_PORT)),
+        )
+        arduino_read_thread.start()
 
     # Variables to track the latest packet
     latest_seq = -1  # Latest sequence number received
@@ -84,18 +98,20 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
         readable, _, _ = select.select([sock], [], [], 0.01)  # 10ms timeout
         if readable:
             # Drain the socket buffer to find the latest packet
+            time_lag_ms = 0
             while True:
                 try:
                     data, _ = sock.recvfrom(1024)  # Buffer size of 1024 bytes
+
                     # Check if packet has enough data for header
                     if len(data) < HEADER_SIZE:
                         print("Received packet too short, skipping")
                         continue
 
                     # Extract sequence number and checksum from header
-                    # I - unsigned int (4 bytes)
-                    # H - unsigned short (2 bytes)
-                    # Q - unsigned long long (8 bytes)
+                    # I - unsigned int (4 bytes) (sequence number)
+                    # H - unsigned short (2 bytes) (checksum)
+                    # Q - unsigned long long (8 bytes) (timestamp)
                     try:
                         seq, received_checksum, timestamp_ms = struct.unpack(
                             ">IHQ", data[:HEADER_SIZE]
@@ -143,6 +159,11 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
 
                 pitch, yaw, throttle, steering = struct.unpack(">ffff", latest_packet)
 
+                if arduino_sequence_number % 100 == 0:
+                    print(
+                        f"processing - Seq: {int(latest_seq):05d}, lag: {time_lag_ms:.2f}ms p: {pitch:.2f}, y: {yaw:.2f}, t: {throttle:.2f}, s: {steering:.2f}"
+                    )
+
                 if not mac_test_environment:
                     # Send the command to the Arduino
                     send_command_to_arduino(
@@ -156,6 +177,11 @@ def start_udp_control_receiver(mac_test_environment: bool = False):
                 arduino_sequence_number = (arduino_sequence_number + 1) % 256
 
                 latest_packet = None  # Reset for the next cycle
+
+    if not mac_test_environment:
+        arduino_thread_flags["thread_enabled"] = False
+        arduino_read_thread.join()
+        arduino_serial_interface.close()
 
 
 if __name__ == "__main__":

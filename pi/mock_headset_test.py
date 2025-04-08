@@ -32,6 +32,8 @@ if not success:
 
 print("Starting mock headset server...")
 
+CLOCK_SYNC_PORT = CLOCK_SYNC_PORT + 2
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.bind(("0.0.0.0", CLOCK_SYNC_PORT))
 sock.listen(1)
@@ -89,13 +91,15 @@ print("Opening UDP socket for control messages...")
 # Create a UDP socket for control messages
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+CONTROL_STREAM_PORT = CONTROL_STREAM_PORT + 2
+
 udp_sock.bind(("0.0.0.0", CONTROL_STREAM_PORT))
-udp_sock.setblocking(False)
 
 # Wait for the first packet from the receiver to get its address
 data, target_addr = udp_sock.recvfrom(1024)
 print(f"Received initial packet from {target_addr}, starting to send data.")
 
+udp_sock.setblocking(False)
 
 def calculate_checksum(data: bytes) -> int:
     """
@@ -180,14 +184,14 @@ counter = 0  # Initialize payload counter for simulation
 # Send data packets continuously
 while True:
     # Check if there is data to read from the socket
-    readable, _, _ = select.select([sock], [], [], 0.01)  # 10ms timeout
+    readable, _, _ = select.select([udp_sock], [], [], 0.01)  # 10ms timeout
     if readable:
         latest_packet = None
 
         # Drain the socket buffer to find the latest packet
         while True:
             try:
-                data, _ = sock.recvfrom(1024)  # Buffer size of 1024 bytes
+                data, _ = udp_sock.recvfrom(1024)  # Buffer size of 1024 bytes
 
                 # Check if packet is
                 if len(data) != TELEMETRY_PACKET_SIZE:
@@ -208,6 +212,9 @@ while True:
                     continue
             except BlockingIOError:
                 # No more packets to read, exit the inner loop
+                break
+            except Exception as e:
+                print(f"Unexpected error: {e}")
                 break
         if latest_packet:
             # Process the latest packet if one was found

@@ -89,14 +89,17 @@ def read_from_arduino(flags, active_socket, serial_port, addr):
                 speed_mph = float(speed_mph)
                 distance_ft = float(distance_ft)
 
-                _ = active_socket.sendto(
-                    struct.pack(
-                        # "<ffii" means little-endian 2 floats (4 bytes each), 2 ints (4 bytes each)
-                        "<ffii",
-                        speed_mph,
-                        distance_ft,
-                        control_battery_percentage,
-                        drive_battery_percentage,
-                    ),
-                    addr,
-                )
+                try:
+                    _ = active_socket.sendto(
+                        struct.pack(
+                            # "<ffii" means little-endian 2 floats (4 bytes each), 2 ints (4 bytes each)
+                            "<ffii",
+                            speed_mph,
+                            distance_ft,
+                            int(control_battery_percentage),
+                            int(drive_battery_percentage),
+                        ),
+                        addr,
+                    )
+                except Exception as e:
+                    print(f"Error sending data to socket: {e}")

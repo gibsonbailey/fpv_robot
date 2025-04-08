@@ -77,7 +77,7 @@ def read_from_arduino(flags, active_socket, serial_port, addr):
     while flags['thread_enabled']:
         data = serial_port.readline().decode("utf-8").strip()
         if data:
-            print(f"Received from Arduino: {data}")
+            # print(f"Received from Arduino: {data}")
             if data.startswith("tel:"):
                 (
                     _,
